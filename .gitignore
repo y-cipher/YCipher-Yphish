@@ -1,0 +1,12 @@
+.env
+.venv/
+.uv-cache/
+.pgtest/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.coverage
+htmlcov/
+staticfiles/
+private_artifacts/
+*.log

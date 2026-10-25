@@ -1,0 +1,10 @@
+.env
+.venv
+.uv-cache
+.git
+__pycache__
+*.pyc
+private_artifacts
+staticfiles
+tmp
+output
