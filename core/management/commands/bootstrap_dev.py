@@ -124,7 +124,7 @@ class Command(BaseCommand):
         case, _ = create_email_case(
             organization=organization,
             mailbox=mailbox,
-            provider_immutable_id=f"fixture:{organization.slug}:{mailbox.address}",
+            gmail_message_id=f"fixture:{organization.slug}:{mailbox.address}",
         )
         run, _ = AnalysisRun.objects.get_or_create(
             case=case, attempt=1,

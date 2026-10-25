@@ -1,7 +1,4 @@
-"""Tenant-scoped records for ingestion, analysis, response, and audit.
-
-No provider calls or message processing are implemented in Module 1.
-"""
+"""Tenant-scoped records for ingestion, analysis, response, and audit."""
 
 import uuid
 
@@ -37,6 +34,11 @@ class Organization(UUIDModel):
     slug = models.SlugField(max_length=80, unique=True)
     is_active = models.BooleanField(default=True)
     retention_days = models.PositiveIntegerField(default=90)
+    gmail_service_account_client_id = models.CharField(max_length=255, blank=True)
+    gmail_access_verified_at = models.DateTimeField(null=True, blank=True)
+    gmail_response_enabled = models.BooleanField(default=False)
+    gmail_response_service_account_client_id = models.CharField(max_length=255, blank=True)
+    gmail_response_scope = models.CharField(max_length=255, blank=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
@@ -72,16 +74,38 @@ class Membership(UUIDModel):
 
 
 class Mailbox(UUIDModel):
+    class Provider(models.TextChoices):
+        LEGACY = "legacy", "Legacy or unconfigured"
+        GMAIL = "gmail", "Google Workspace Gmail"
+
     class State(models.TextChoices):
         PENDING = "pending", "Pending"
         ACTIVE = "active", "Active"
         PAUSED = "paused", "Paused"
         ERROR = "error", "Error"
 
+    class GmailSyncStatus(models.TextChoices):
+        NOT_ENROLLED = "not_enrolled", "Not enrolled"
+        ENROLLING = "enrolling", "Enrollment verification"
+        INITIALIZING = "initializing", "Initial synchronization"
+        READY = "ready", "Incremental synchronization"
+        COVERAGE_GAP = "coverage_gap", "Coverage gap"
+        ERROR = "error", "Synchronization error"
+
     organization = models.ForeignKey(Organization, on_delete=models.PROTECT, related_name="mailboxes")
     address = models.EmailField(max_length=320)
     display_name = models.CharField(max_length=200, blank=True)
     provider_mailbox_id = models.CharField(max_length=255, blank=True)
+    provider = models.CharField(max_length=16, choices=Provider.choices, default=Provider.GMAIL)
+    gmail_history_id = models.CharField(max_length=64, blank=True)
+    gmail_label_id = models.CharField(max_length=255, blank=True)
+    gmail_last_synced_at = models.DateTimeField(null=True, blank=True)
+    gmail_sync_status = models.CharField(max_length=20, choices=GmailSyncStatus.choices, default=GmailSyncStatus.NOT_ENROLLED)
+    gmail_enrolled_at = models.DateTimeField(null=True, blank=True)
+    gmail_enrollment_history_id = models.CharField(max_length=64, blank=True)
+    gmail_initial_sync_completed_at = models.DateTimeField(null=True, blank=True)
+    gmail_coverage_gap_from_history_id = models.CharField(max_length=64, blank=True)
+    gmail_coverage_gap_detected_at = models.DateTimeField(null=True, blank=True)
     state = models.CharField(max_length=16, choices=State.choices, default=State.PENDING)
     last_error_code = models.CharField(max_length=100, blank=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -95,6 +119,8 @@ class Mailbox(UUIDModel):
                 name="mailbox_org_provider_unique",
             ),
             models.CheckConstraint(condition=Q(state__in=["pending", "active", "paused", "error"]), name="mailbox_state_valid"),
+            models.CheckConstraint(condition=Q(provider__in=["legacy", "gmail"]), name="mailbox_provider_valid"),
+            models.CheckConstraint(condition=Q(gmail_sync_status__in=["not_enrolled", "enrolling", "initializing", "ready", "coverage_gap", "error"]), name="mailbox_gmail_sync_status_valid"),
         ]
         indexes = [models.Index(fields=["organization", "state"], name="mailbox_org_state_idx")]
 
@@ -121,8 +147,13 @@ class EmailCase(UUIDModel):
     mailbox = models.ForeignKey(Mailbox, on_delete=models.PROTECT, related_name="email_cases")
     provider_immutable_id = models.CharField(
         max_length=512,
-        help_text="Provider-assigned immutable message ID; required by the case creation service.",
+        help_text="Legacy identity field; new Gmail cases store their Gmail message ID here too for existing integrity guards.",
     )
+    gmail_message_id = models.CharField(max_length=512, blank=True)
+    gmail_thread_id = models.CharField(max_length=512, blank=True)
+    gmail_label_ids = models.JSONField(default=list, blank=True)
+    gmail_internal_date_ms = models.CharField(max_length=32, blank=True)
+    gmail_is_historical = models.BooleanField(default=False)
     internet_message_id = models.CharField(max_length=512, blank=True)
     subject = models.CharField(max_length=998, blank=True)
     sender_address = models.EmailField(max_length=320, blank=True)
@@ -141,6 +172,15 @@ class EmailCase(UUIDModel):
                 condition=~Q(provider_immutable_id=""),
                 name="case_org_mailbox_immutable_id_unique",
             ),
+            models.UniqueConstraint(
+                fields=["organization", "mailbox", "gmail_message_id"],
+                condition=~Q(gmail_message_id=""),
+                name="case_org_mailbox_gmail_id_unique",
+            ),
+            models.CheckConstraint(
+                condition=Q(gmail_message_id="") | Q(provider_immutable_id=models.F("gmail_message_id")),
+                name="case_gmail_legacy_id_match",
+            ),
             models.CheckConstraint(condition=Q(state__in=["queued", "processing", "analyzed", "action_pending", "completed", "failed"]), name="case_state_valid"),
             models.CheckConstraint(condition=Q(verdict__in=["unknown", "legitimate", "suspicious", "malicious"]), name="case_verdict_valid"),
             models.CheckConstraint(
@@ -151,6 +191,7 @@ class EmailCase(UUIDModel):
         indexes = [
             models.Index(fields=["organization", "state", "-created_at"], name="case_org_state_created_idx"),
             models.Index(fields=["mailbox", "-received_at"], name="case_mailbox_received_idx"),
+            models.Index(fields=["mailbox", "gmail_thread_id"], name="case_mailbox_thread_idx"),
         ]
 
 

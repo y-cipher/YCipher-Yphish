@@ -23,6 +23,8 @@ services:
     environment:
       DATABASE_HOST: db
       PRIVATE_ARTIFACT_ROOT: /app/private_artifacts
+      GOOGLE_SERVICE_ACCOUNT_FILE: /run/secrets/google-service-account.json
+      GOOGLE_INGESTION_SERVICE_ACCOUNT_FILE: /run/secrets/google-service-account.json
     depends_on:
       db:
         condition: service_healthy
@@ -31,6 +33,51 @@ services:
       - "127.0.0.1:8000:8000"
     volumes:
       - private_artifacts:/app/private_artifacts
+      - ./secrets:/run/secrets:ro
+
+  rabbitmq:
+    image: rabbitmq:3.13-alpine
+    restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER: yphish
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:?Set RABBITMQ_PASSWORD in .env}
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  worker:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DATABASE_HOST: db
+      PRIVATE_ARTIFACT_ROOT: /app/private_artifacts
+      GOOGLE_SERVICE_ACCOUNT_FILE: /run/secrets/google-service-account.json
+      GOOGLE_INGESTION_SERVICE_ACCOUNT_FILE: /run/secrets/google-service-account.json
+      CELERY_BROKER_URL: amqp://yphish:${RABBITMQ_PASSWORD:?Set RABBITMQ_PASSWORD in .env}@rabbitmq:5672//
+    depends_on:
+      db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    command: celery -A config worker -l WARNING --concurrency=2
+    volumes:
+      - private_artifacts:/app/private_artifacts
+      - ./secrets:/run/secrets:ro
+
+  beat:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DATABASE_HOST: db
+      CELERY_BROKER_URL: amqp://yphish:${RABBITMQ_PASSWORD:?Set RABBITMQ_PASSWORD in .env}@rabbitmq:5672//
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    command: celery -A config beat -l WARNING --schedule /tmp/celerybeat-schedule
 
 volumes:
   postgres_data:

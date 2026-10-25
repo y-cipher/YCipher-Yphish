@@ -62,21 +62,25 @@ def _audit(organization, case, event_type, subject):
 
 @transaction.atomic
 def create_email_case(
-    *, organization, mailbox, provider_immutable_id,
-    internet_message_id="", subject="", sender_address="", received_at=None,
+    *, organization, mailbox, gmail_message_id,
+    gmail_thread_id="", internet_message_id="", subject="", sender_address="", received_at=None,
 ):
-    """Return ``(case, created)`` for one mailbox and provider immutable ID.
+    """Return ``(case, created)`` for one Gmail message in one mailbox.
 
     Retries return the original row without changing metadata or processing state.
     The nonblank key and database unique constraint settle concurrent inserts.
     """
-    immutable_id = _require_key(provider_immutable_id, max_length=512)
+    immutable_id = _require_key(gmail_message_id, max_length=512)
     _require_mailbox(organization, mailbox)
+    if mailbox.provider != Mailbox.Provider.GMAIL:
+        raise InvalidRelationship("Mailbox is not enrolled for Gmail")
     case, created = EmailCase.objects.get_or_create(
         organization=organization,
         mailbox=mailbox,
-        provider_immutable_id=immutable_id,
+        gmail_message_id=immutable_id,
         defaults={
+            "provider_immutable_id": immutable_id,
+            "gmail_thread_id": gmail_thread_id,
             "internet_message_id": internet_message_id,
             "subject": subject,
             "sender_address": sender_address,

@@ -1,20 +1,20 @@
-# Yphish — Module 1
+# Yphish — Django foundation and Gmail integration
 
-This module is the Django/PostgreSQL data foundation for Yphish. It defines organizations, enrollment records, email cases, artifacts, analysis and action history, feedback, and an append-only audit log. It does not ingest email, call Microsoft Graph, analyze messages, or execute mailbox actions.
+This repository contains the Django/PostgreSQL data foundation and a Google Workspace Gmail integration. See [Gmail setup, runtime, and test instructions](docs/gmail.md). The Module 1 notes below describe the original foundation; the Gmail guide documents the current provider behavior.
 
 ## Module 1: run and test
 
-From the project root, copy `.env.example` to `.env` and replace its two example secrets before the first run:
+From the project root, copy `.env.example` to `.env` and replace the Django, database, and RabbitMQ example secrets before the first run:
 
 ```powershell
 Copy-Item .env.example .env
-# Edit .env: set DJANGO_SECRET_KEY and DATABASE_PASSWORD.
+# Edit .env: set DJANGO_SECRET_KEY, DATABASE_PASSWORD, and RABBITMQ_PASSWORD.
 docker compose up --build -d
 docker compose exec web python manage.py test core
 Invoke-RestMethod http://localhost:8000/health/
 ```
 
-The test command runs the Module 1 database, admin, fixture, and storage tests. The health command should return `status: ok`. To stop the application while preserving its data, run `docker compose down`.
+The test command runs the database, admin, fixture, storage, Gmail, and migration tests. The health command should return `status: ok`. To stop the application while preserving its data, run `docker compose down`.
 
 ## Requirements
 
@@ -26,7 +26,7 @@ The application uses Django 5.2 LTS (`>=5.2.18,<5.3`) and psycopg 3. The [Django
 ## Start with Docker Compose
 
 1. Start Docker Desktop/Engine. Copy `.env.example` to `.env` (PowerShell: `Copy-Item .env.example .env`; POSIX shell: `cp .env.example .env`).
-2. Edit `.env`: set long random, different values for `DJANGO_SECRET_KEY` and `DATABASE_PASSWORD`. Keep `.env` private. The example is for local development (`DJANGO_DEBUG=1`).
+2. Edit `.env`: set long random, different values for `DJANGO_SECRET_KEY`, `DATABASE_PASSWORD`, and `RABBITMQ_PASSWORD`. Keep `.env` private. The example is for local development (`DJANGO_DEBUG=1`).
 3. Run `docker compose up --build -d`. Compose starts PostgreSQL, waits for its health check, applies Django migrations, and starts the development server.
 4. Run `docker compose logs -f web` to inspect startup. Open `http://localhost:8000/health/`; a successful response is `{"status":"ok"}`.
 5. Run `docker compose exec web python manage.py bootstrap_dev --with-sample-cases` to create the synthetic development organization, staff owner, and two pending `example.test` mailboxes. Running it again returns the same records. The optional sample cases contain no message body or MIME and all sample actions are skipped.
@@ -52,7 +52,7 @@ docker compose exec web python manage.py bootstrap_dev --slug lab --name "Lab" -
 docker compose exec web python manage.py changepassword lab_owner
 ```
 
-The command requires `DJANGO_DEBUG=1`, accepts only mailbox addresses under `example.test`, and refuses to promote an existing unrelated user. It creates a staff owner with an unusable password, an active owner membership, and pending mailbox records with blank provider IDs. The optional sample records use synthetic IDs, empty subject and sender fields, no artifact file, and a skipped action. No Graph token, mailbox credential, MIME, or email body is stored.
+The command requires `DJANGO_DEBUG=1`, accepts only mailbox addresses under `example.test`, and refuses to promote an existing unrelated user. It creates a staff owner with an unusable password, an active owner membership, and pending mailbox records. The optional sample records use synthetic IDs, empty subject and sender fields, no artifact file, and a skipped action. No Gmail credential, MIME, or email body is stored.
 
 ### Admin roles
 
@@ -87,6 +87,8 @@ For a POSIX shell, `set -a; . ./.env; set +a` exports a trusted `.env` file into
 | `DATABASE_HOST`, `DATABASE_PORT` | PostgreSQL endpoint; defaults to `localhost:5432` for host use. Compose sets the host to `db`. |
 | `POSTGRES_HOST_PORT` | Optional host port for the Compose database; defaults to `5433`. |
 | `PRIVATE_ARTIFACT_ROOT` | Private filesystem directory. Compose mounts a named volume at `/app/private_artifacts`. |
+| `RABBITMQ_PASSWORD` | Required Compose broker password, distinct from the database password. |
+| `GOOGLE_SERVICE_ACCOUNT_FILE` | Service-account JSON path for host execution; Compose mounts `secrets/google-service-account.json`. |
 
 `DJANGO_DEBUG=0` enables secure session and CSRF cookies. For a real deployment, put a production WSGI/ASGI server behind HTTPS, configure proxy and TLS settings, restrict database connectivity, and back up **both** the database and artifact store. Compose's `runserver` is for development only.
 
@@ -100,20 +102,20 @@ See [the complete model and constraint reference](docs/data-model.md) for every 
 - `Artifact` holds a private file, its SHA-256 digest, size, kind, and storage state (`pending`, `stored`, `failed`, `deleted`). `AnalysisRun` tracks attempts; `Evidence` records sourced observations and unavailable/error outcomes.
 - `ActionExecution` records an intended or executed response and its idempotency key. `Feedback` records proposed corrections. `AuditEvent` records history and is append-only at the database level.
 
-The initial migration creates PostgreSQL unique/check constraints and query indexes. The second migration adds triggers that reject cross-organization or cross-case references and prevent changing an existing record's organization. Artifact and analysis-run case links cannot be reassigned. The third migration adds service idempotency keys and failure-state constraints. Mailbox addresses are case-insensitively unique per organization. Provider immutable IDs are unique within each organization and mailbox; action idempotency keys are unique within an organization.
+The initial migration creates PostgreSQL unique/check constraints and query indexes. The second migration adds triggers that reject cross-organization or cross-case references and prevent changing an existing record's organization. Artifact and analysis-run case links cannot be reassigned. The third migration adds service idempotency keys and failure-state constraints. The fourth adds Gmail identity, history cursor, label, and delegation fields while preserving legacy rows. Mailbox addresses are case-insensitively unique per organization. Gmail message IDs are unique within each organization and mailbox; action idempotency keys are unique within an organization.
 
-The models establish persistence and legal states, and the service guards the failure and skipped transitions described below. Full action state-transition policy, tenant permissions in views, artifact retention jobs, encryption at rest, and live integration still need implementation before processing real email.
+The models establish persistence and legal states, and the service guards the failure and skipped transitions described below. Gmail polling and message-level action execution are documented in the [Gmail guide](docs/gmail.md). Artifact retention jobs, encryption at rest, and a phishing classifier are still outstanding.
 
 ### Transactional write services
 
 `core.services` provides `create_email_case`, `record_evidence`, and `create_action_execution`. Each returns `(record, created)`. Callers supply a persisted organization and related records; the service validates their relationships, writes the new row and its audit event in one transaction, and returns the existing row on a duplicate request. Database unique constraints settle concurrent inserts.
 
-- Case creation requires a nonblank, case-sensitive `provider_immutable_id`. Its uniqueness scope is `(organization, mailbox, provider_immutable_id)`. The field was renamed from `provider_message_id` without dropping stored values. Legacy rows with a blank ID can remain, but a database trigger rejects new blank IDs. A retry does not overwrite case metadata or state.
+- Gmail case creation requires a nonblank, case-sensitive `gmail_message_id`, unique within `(organization, mailbox)`. New Gmail rows also populate the retained `provider_immutable_id` for existing integrity guards. A retry does not overwrite case metadata or state; `gmail_thread_id` is context only.
 - Evidence recording requires a stable, nonblank idempotency key unique within one case. A database trigger rejects new blank keys while allowing older keyless evidence to remain. A repeat with different evidence data raises `IdempotencyConflict`. Supply the original timezone-aware `observed_at` on retries.
 - Action creation requires a stable, nonblank idempotency key unique across the organization. Reusing it for another case, action, policy version, analysis run, or target raises `IdempotencyConflict`. Creation only records a `proposed` action; it does not authorize or execute it.
 - `mark_action_failure` records `failed` only when a started attempt is known not to have succeeded. Use `uncertain=True` only after an action entered `running` and the external outcome is unknown; it records `reconciling`, which requires provider-state reconciliation before another attempt. `mark_action_skipped` records a proposed or authorized action that was never attempted. Failed, reconciling, and skipped rows require a nonblank `error_code`; the migration assigns `legacy_unspecified` to any older rows missing one.
 
-The database trigger remains the final guard against cross-organization/case relationships even when callers bypass the services. The services raise `InvalidRelationship` before writing when they detect one. The functions are Python APIs for later workers; Module 1 still has no ingestion HTTP endpoint or Graph integration.
+The database trigger remains the final guard against cross-organization/case relationships even when callers bypass the services. The services raise `InvalidRelationship` before writing when they detect one. Gmail workers call these Python APIs; no ingestion HTTP endpoint is exposed.
 
 ## Private artifact storage
 
@@ -139,4 +141,4 @@ docker compose run --rm -T -e DATABASE_NAME=yphish_module1_verify web python man
 docker compose exec -T db dropdb -U yphish yphish_module1_verify
 ```
 
-The table count must be `0` before migration. The final command removes only the disposable database you just created. The local verification run applied all three core migrations successfully from an empty database.
+The table count must be `0` before migration. The final command removes only the disposable database you just created. The PostgreSQL test runner also applies the migration chain to a fresh test database.

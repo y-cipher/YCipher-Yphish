@@ -104,6 +104,21 @@ USE_TZ = True
 STATIC_URL = "static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
 PRIVATE_ARTIFACT_ROOT = Path(env("PRIVATE_ARTIFACT_ROOT", str(BASE_DIR / "private_artifacts"))).resolve()
+GOOGLE_SERVICE_ACCOUNT_FILE = os.environ.get("GOOGLE_SERVICE_ACCOUNT_FILE", "")
+GOOGLE_INGESTION_SERVICE_ACCOUNT_FILE = os.environ.get(
+    "GOOGLE_INGESTION_SERVICE_ACCOUNT_FILE", GOOGLE_SERVICE_ACCOUNT_FILE,
+)
+GOOGLE_RESPONSE_SERVICE_ACCOUNT_FILE = os.environ.get("GOOGLE_RESPONSE_SERVICE_ACCOUNT_FILE", "")
+CELERY_BROKER_URL = os.environ.get("CELERY_BROKER_URL", "amqp://guest:guest@localhost:5672//")
+CELERY_TASK_SERIALIZER = "json"
+CELERY_ACCEPT_CONTENT = ["json"]
+CELERY_TIMEZONE = "UTC"
+CELERY_BEAT_SCHEDULE = {
+    "gmail-incremental-poll": {
+        "task": "core.tasks.poll_gmail",
+        "schedule": 60.0,
+    },
+}
 STORAGES = {
     "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
     "private_artifacts": {

@@ -12,3 +12,6 @@ private_artifacts/
 *.log
 /tmp/
 /output/
+secrets/*
+!secrets/.gitkeep
+.env.example

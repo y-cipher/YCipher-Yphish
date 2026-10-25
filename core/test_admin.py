@@ -28,11 +28,11 @@ class TenantAdminTests(TestCase):
             organization=self.other_org, address="two@example.test"
         )
         self.case = EmailCase.objects.create(
-            organization=self.org, mailbox=self.mailbox, provider_immutable_id="admin-one-case"
+            organization=self.org, mailbox=self.mailbox, gmail_message_id="admin-one-case", provider_immutable_id="admin-one-case"
         )
         self.other_case = EmailCase.objects.create(
             organization=self.other_org, mailbox=self.other_mailbox,
-            provider_immutable_id="admin-two-case",
+            gmail_message_id="admin-two-case", provider_immutable_id="admin-two-case",
         )
         self.artifact = Artifact.objects.create(
             organization=self.org, case=self.case, kind=Artifact.Kind.DERIVED,

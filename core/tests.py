@@ -29,11 +29,11 @@ class DatabaseIntegrityTests(TransactionTestCase):
         self.org = Organization.objects.create(name="One", slug="one")
         self.other_org = Organization.objects.create(name="Two", slug="two")
         self.mailbox = Mailbox.objects.create(organization=self.org, address="Inbox@example.com")
-        self.case = EmailCase.objects.create(organization=self.org, mailbox=self.mailbox, provider_immutable_id="baseline")
+        self.case = EmailCase.objects.create(organization=self.org, mailbox=self.mailbox, gmail_message_id="baseline", provider_immutable_id="baseline")
 
     def test_case_cannot_link_to_another_organizations_mailbox(self):
         with self.assertRaises(DatabaseError), transaction.atomic():
-            EmailCase.objects.create(organization=self.other_org, mailbox=self.mailbox, provider_immutable_id="cross-org")
+            EmailCase.objects.create(organization=self.other_org, mailbox=self.mailbox, gmail_message_id="cross-org", provider_immutable_id="cross-org")
 
     def test_mailbox_address_is_case_insensitively_unique_within_organization(self):
         with self.assertRaises(IntegrityError), transaction.atomic():
@@ -66,7 +66,7 @@ class TransactionalServiceTests(TransactionTestCase):
         self.mailbox = Mailbox.objects.create(organization=self.org, address="one@example.com")
         self.other_mailbox = Mailbox.objects.create(organization=self.other_org, address="two@example.com")
         self.case, _ = create_email_case(
-            organization=self.org, mailbox=self.mailbox, provider_immutable_id="baseline"
+            organization=self.org, mailbox=self.mailbox, gmail_message_id="baseline"
         )
 
     def _concurrent(self, operation):
@@ -89,11 +89,11 @@ class TransactionalServiceTests(TransactionTestCase):
     def test_case_duplicate_returns_original_without_overwriting_metadata(self):
         first, created = create_email_case(
             organization=self.org, mailbox=self.mailbox,
-            provider_immutable_id="immutable-1", subject="Original",
+            gmail_message_id="immutable-1", subject="Original",
         )
         again, created_again = create_email_case(
             organization=self.org, mailbox=self.mailbox,
-            provider_immutable_id="immutable-1", subject="Changed on retry",
+            gmail_message_id="immutable-1", subject="Changed on retry",
         )
         self.assertTrue(created)
         self.assertFalse(created_again)
@@ -103,21 +103,21 @@ class TransactionalServiceTests(TransactionTestCase):
 
     def test_same_immutable_id_in_different_mailboxes_is_distinct(self):
         first, _ = create_email_case(
-            organization=self.org, mailbox=self.mailbox, provider_immutable_id="shared-id"
+            organization=self.org, mailbox=self.mailbox, gmail_message_id="shared-id"
         )
         second, created = create_email_case(
-            organization=self.other_org, mailbox=self.other_mailbox, provider_immutable_id="shared-id"
+            organization=self.other_org, mailbox=self.other_mailbox, gmail_message_id="shared-id"
         )
         self.assertTrue(created)
         self.assertNotEqual(first.pk, second.pk)
 
     def test_concurrent_case_requests_return_one_row(self):
         results = self._concurrent(lambda: create_email_case(
-            organization=self.org, mailbox=self.mailbox, provider_immutable_id="racing-case"
+            organization=self.org, mailbox=self.mailbox, gmail_message_id="racing-case"
         ))
         self.assertEqual(results[0][0], results[1][0])
         self.assertEqual(sorted(result[1] for result in results), [False, True])
-        self.assertEqual(EmailCase.objects.filter(provider_immutable_id="racing-case").count(), 1)
+        self.assertEqual(EmailCase.objects.filter(gmail_message_id="racing-case").count(), 1)
 
     def test_evidence_duplicate_and_concurrent_requests(self):
         observed_at = timezone.now()
@@ -156,7 +156,7 @@ class TransactionalServiceTests(TransactionTestCase):
     def test_invalid_organization_and_case_relationships(self):
         with self.assertRaises(InvalidRelationship):
             create_email_case(
-                organization=self.other_org, mailbox=self.mailbox, provider_immutable_id="wrong-org"
+                organization=self.other_org, mailbox=self.mailbox, gmail_message_id="wrong-org"
             )
         with self.assertRaises(InvalidRelationship):
             record_evidence(
@@ -164,7 +164,7 @@ class TransactionalServiceTests(TransactionTestCase):
                 source=Evidence.Source.PARSER, label="Header", observed_at=timezone.now(),
             )
         other_case, _ = create_email_case(
-            organization=self.org, mailbox=self.mailbox, provider_immutable_id="other-case"
+            organization=self.org, mailbox=self.mailbox, gmail_message_id="other-case"
         )
         other_run = AnalysisRun.objects.create(organization=self.org, case=other_case)
         with self.assertRaises(InvalidRelationship):
@@ -221,4 +221,4 @@ class TransactionalServiceTests(TransactionTestCase):
                 requested_at=timezone.now(),
             )
         with self.assertRaises(DatabaseError), transaction.atomic():
-            EmailCase.objects.create(organization=self.org, mailbox=self.mailbox, provider_immutable_id="")
+            EmailCase.objects.create(organization=self.org, mailbox=self.mailbox, gmail_message_id="")

@@ -9,6 +9,7 @@ from django.contrib import admin
 from django.contrib.auth import get_user_model
 from django.contrib.auth.admin import GroupAdmin, UserAdmin
 from django.contrib.auth.models import Group
+from django.utils import timezone
 
 from .models import (
     ActionExecution, AnalysisRun, Artifact, AuditEvent, EmailCase, Evidence,
@@ -127,10 +128,21 @@ class OrganizationAdmin(TenantScopedAdmin):
     def get_fields(self, request, obj=None):
         if obj is None:
             return ("name", "slug", "is_active", "retention_days")
-        return ("id", "slug", "name", "is_active", "retention_days", "created_at", "updated_at")
+        return ("id", "slug", "name", "is_active", "retention_days", "gmail_service_account_client_id", "gmail_access_verified_at", "gmail_response_enabled", "created_at", "updated_at")
 
     def get_readonly_fields(self, request, obj=None):
-        return ("id", "slug", "created_at", "updated_at") if obj else ()
+        return ("id", "slug", "gmail_service_account_client_id", "gmail_access_verified_at", "created_at", "updated_at") if obj else ()
+
+    def save_model(self, request, obj, form, change):
+        previous = Organization.objects.get(pk=obj.pk).gmail_response_enabled if change else False
+        super().save_model(request, obj, form, change)
+        if change and previous != obj.gmail_response_enabled:
+            AuditEvent.objects.create(
+                organization=obj, actor=request.user,
+                event_type="organization.gmail_response_changed",
+                subject_type="organization", subject_id=obj.pk,
+                details={"enabled": obj.gmail_response_enabled}, occurred_at=timezone.now(),
+            )
 
 
 @admin.register(Membership)
@@ -170,14 +182,14 @@ class MailboxAdmin(TenantScopedAdmin):
             return ("organization", "address", "display_name")
         return (
             "organization", "address", "display_name", "state",
-            "provider_mailbox_id", "last_error_code", "created_at", "updated_at",
+            "provider", "provider_mailbox_id", "gmail_history_id", "gmail_label_id", "gmail_last_synced_at", "last_error_code", "created_at", "updated_at",
         )
 
     def get_readonly_fields(self, request, obj=None):
         if obj is None:
             return ()
         return (
-            "organization", "address", "state", "provider_mailbox_id",
+            "organization", "address", "state", "provider", "provider_mailbox_id", "gmail_history_id", "gmail_label_id", "gmail_last_synced_at",
             "last_error_code", "created_at", "updated_at",
         )
 
