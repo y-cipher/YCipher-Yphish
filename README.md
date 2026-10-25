@@ -14,7 +14,7 @@ docker compose exec web python manage.py test core
 Invoke-RestMethod http://localhost:8000/health/
 ```
 
-The test command runs the Module 1 database and storage tests. The health command should return `status: ok`. To stop the application while preserving its data, run `docker compose down`.
+The test command runs the Module 1 database, admin, fixture, and storage tests. The health command should return `status: ok`. To stop the application while preserving its data, run `docker compose down`.
 
 ## Requirements
 
@@ -29,7 +29,8 @@ The application uses Django 5.2 LTS (`>=5.2.18,<5.3`) and psycopg 3. The [Django
 2. Edit `.env`: set long random, different values for `DJANGO_SECRET_KEY` and `DATABASE_PASSWORD`. Keep `.env` private. The example is for local development (`DJANGO_DEBUG=1`).
 3. Run `docker compose up --build -d`. Compose starts PostgreSQL, waits for its health check, applies Django migrations, and starts the development server.
 4. Run `docker compose logs -f web` to inspect startup. Open `http://localhost:8000/health/`; a successful response is `{"status":"ok"}`.
-5. If needed, create a Django administrator with `docker compose exec web python manage.py createsuperuser`. The default admin UI is available at `http://localhost:8000/admin/`. Domain models are deliberately not registered there until tenant-aware permissions exist.
+5. Run `docker compose exec web python manage.py bootstrap_dev --with-sample-cases` to create the synthetic development organization, staff owner, and two pending `example.test` mailboxes. Running it again returns the same records. The optional sample cases contain no message body or MIME and all sample actions are skipped.
+6. To sign in as the synthetic owner, run `docker compose exec web python manage.py changepassword demo_owner` and choose a local password interactively. The bootstrap command stores no password or provider credential; the owner starts with an unusable password. Open `http://localhost:8000/admin/`.
 
 Stop the stack with `docker compose down`. The PostgreSQL and private artifact named volumes persist. `docker compose down -v` **deletes both volumes and their data**.
 
@@ -39,9 +40,23 @@ Stop the stack with `docker compose down`. The PostgreSQL and private artifact n
 docker compose exec web python manage.py check
 docker compose exec web python manage.py showmigrations core
 docker compose exec web python manage.py shell
+docker compose exec web python manage.py bootstrap_dev --help
 ```
 
 The web container runs as an unprivileged user. Compose exposes PostgreSQL only on the local loopback interface at host port 5433 by default, so it can coexist with a local PostgreSQL server on 5432. The web container connects internally to `db:5432`. To inspect the Compose database in pgAdmin, connect to `127.0.0.1:5433` using the database credentials in `.env`; set `POSTGRES_HOST_PORT` to another free port if needed. The development web server is exposed only at port 8000 on loopback.
+
+### Custom synthetic setup
+
+```powershell
+docker compose exec web python manage.py bootstrap_dev --slug lab --name "Lab" --owner lab_owner --mailbox alerts@example.test --mailbox finance@example.test --with-sample-cases
+docker compose exec web python manage.py changepassword lab_owner
+```
+
+The command requires `DJANGO_DEBUG=1`, accepts only mailbox addresses under `example.test`, and refuses to promote an existing unrelated user. It creates a staff owner with an unusable password, an active owner membership, and pending mailbox records with blank provider IDs. The optional sample records use synthetic IDs, empty subject and sender fields, no artifact file, and a skipped action. No Graph token, mailbox credential, MIME, or email body is stored.
+
+### Admin roles
+
+All admin users need `is_staff=True` and an active membership in an active organization. Superusers can inspect all organizations and manage global Django users and groups. Owners can view their organization and memberships, edit organization settings, and add pending mailboxes. Admin members can view organization settings and memberships and add pending mailboxes. Analysts can inspect cases, evidence, runs, actions, feedback, artifacts, and audit history. Viewers can inspect cases, mailboxes, evidence, runs, actions, and feedback; artifact and audit views are hidden from them. Owners and admins can also inspect those operational records. Global Django user and group admin views remain superuser-only even if a staff user has a separately granted auth permission. Mailbox organization, address, provider identity, and state cannot be changed through admin after creation. Operational records are read-only; the write services and database triggers remain authoritative.
 
 ## Run directly on the host
 
@@ -77,6 +92,8 @@ For a POSIX shell, `set -a; . ./.env; set +a` exports a trusted `.env` file into
 
 ## Data model and integrity
 
+See [the complete model and constraint reference](docs/data-model.md) for every model, named database constraint, index, relationship guard, and state.
+
 - `Organization` owns tenant records; `Membership` links Django users to organizations with owner, admin, analyst, or viewer roles.
 - `Mailbox` records an enrolled address and its enrollment state (`pending`, `active`, `paused`, `error`). No provider credentials are stored in this model.
 - `EmailCase` binds a message to one mailbox and tracks processing (`queued`, `processing`, `analyzed`, `action_pending`, `completed`, `failed`) and verdict (`unknown`, `legitimate`, `suspicious`, `malicious`). Message bodies are not stored in this row.
@@ -104,4 +121,22 @@ The database trigger remains the final guard against cross-organization/case rel
 
 ## Migrations and verification
 
-Run `python manage.py makemigrations --check --dry-run` to confirm model definitions match committed migrations. Run `python manage.py check` for Django system checks and `python manage.py test core` for PostgreSQL-backed integrity tests. The migration itself requires PostgreSQL and runs automatically in the Compose setup. If changing the schema, create and review a migration, then apply it with `python manage.py migrate`. The `core` migrations are PostgreSQL-specific because tenant and audit guards use PL/pgSQL.
+Run `python manage.py makemigrations --check --dry-run` to confirm model definitions match committed migrations. Run `python manage.py check` for Django system checks and `python manage.py test core` for PostgreSQL-backed integrity tests. With Compose, use:
+
+```powershell
+docker compose exec web python manage.py makemigrations --check --dry-run
+docker compose exec web python manage.py test core
+```
+
+The migrations require PostgreSQL and run automatically in the Compose setup. If changing the schema, create and review a migration, then apply it with `python manage.py migrate`. The `core` migrations are PostgreSQL-specific because tenant and audit guards use PL/pgSQL.
+
+To verify the migration chain without touching the main development database, use a new disposable database name:
+
+```powershell
+docker compose exec -T db createdb -U yphish yphish_module1_verify
+docker compose exec -T db psql -U yphish -d yphish_module1_verify -tAc "SELECT count(*) FROM pg_tables WHERE schemaname='public'"
+docker compose run --rm -T -e DATABASE_NAME=yphish_module1_verify web python manage.py migrate --noinput
+docker compose exec -T db dropdb -U yphish yphish_module1_verify
+```
+
+The table count must be `0` before migration. The final command removes only the disposable database you just created. The local verification run applied all three core migrations successfully from an empty database.

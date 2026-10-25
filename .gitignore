@@ -10,3 +10,5 @@ htmlcov/
 staticfiles/
 private_artifacts/
 *.log
+/tmp/
+/output/
