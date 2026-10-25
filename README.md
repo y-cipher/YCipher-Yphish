@@ -1,2 +1,2 @@
-# Yphish-
+# YCipher-Yphish
 Detecting Phishing Email
