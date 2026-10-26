@@ -23,6 +23,8 @@ services:
     environment:
       DATABASE_HOST: db
       PRIVATE_ARTIFACT_ROOT: /app/private_artifacts
+      CLASSIFIER_MODEL_ROOT: /app/model_artifacts
+      CLASSIFIER_DATASET_SELECTION_FILE: /app/datasets/selection.json
       GOOGLE_SERVICE_ACCOUNT_FILE: /run/secrets/google-service-account.json
       GOOGLE_INGESTION_SERVICE_ACCOUNT_FILE: /run/secrets/google-service-account.json
     depends_on:
@@ -38,8 +40,10 @@ services:
       - "127.0.0.1:8000:8000"
     volumes:
       - private_artifacts:/app/private_artifacts
+      - model_artifacts:/app/model_artifacts
       - ./secrets:/run/secrets:ro
       - ./snapshots:/app/snapshots:ro
+      - ./datasets:/app/datasets:ro
 
   rabbitmq:
     image: rabbitmq:3.13-alpine
@@ -60,6 +64,7 @@ services:
     environment:
       DATABASE_HOST: db
       PRIVATE_ARTIFACT_ROOT: /app/private_artifacts
+      CLASSIFIER_MODEL_ROOT: /app/model_artifacts
       GOOGLE_SERVICE_ACCOUNT_FILE: /run/secrets/google-service-account.json
       GOOGLE_INGESTION_SERVICE_ACCOUNT_FILE: /run/secrets/google-service-account.json
       CELERY_BROKER_URL: amqp://yphish:${RABBITMQ_PASSWORD:?Set RABBITMQ_PASSWORD in .env}@rabbitmq:5672//
@@ -74,6 +79,7 @@ services:
     stop_grace_period: 6m
     volumes:
       - private_artifacts:/app/private_artifacts
+      - model_artifacts:/app/model_artifacts
       - ./secrets:/run/secrets:ro
 
   beat:
@@ -93,3 +99,4 @@ services:
 volumes:
   postgres_data:
   private_artifacts:
+  model_artifacts:

@@ -1,6 +1,6 @@
 # Yphish — Django foundation and Gmail integration
 
-This repository contains the Django/PostgreSQL foundation, direct Google Workspace Gmail ingestion, Module 5 Celery/RabbitMQ synchronization, and Module 6 deterministic detection evidence. See [Gmail setup](docs/gmail.md), [Module 5 operations](docs/module5-operations.md), and [Module 6 detection](docs/module6-detection.md). Mailbox response actions are not implemented.
+This repository contains the Django/PostgreSQL foundation, direct Google Workspace Gmail ingestion, Module 5 Celery/RabbitMQ synchronization, Module 6 deterministic detection evidence, and the Module 7 TF-IDF classifier. See [Gmail setup](docs/gmail.md), [Module 5 operations](docs/module5-operations.md), [Module 6 detection](docs/module6-detection.md), and [Module 7 classifier](docs/module7-classifier.md). Mailbox response actions are not implemented.
 
 ## Module 1: run and test
 
@@ -95,6 +95,9 @@ For a POSIX shell, `set -a; . ./.env; set +a` exports a trusted `.env` file into
 | `GMAIL_RETRY_BASE_SECONDS`, `GMAIL_RETRY_MAX_SECONDS` | Gmail retry backoff with jitter; provider `Retry-After` can be longer. |
 | `DETECTION_INDICATOR_MODE` | `operational` by default; `synthetic` is available only in debug mode. |
 | `DETECTION_AUTH_RESULTS_MODE` | `untrusted_context` or `ignore`; retrieved MIME headers are never trusted automatically. |
+| `CLASSIFIER_ACTIVE_VERSION`, `CLASSIFIER_MODEL_ROOT` | Optional signed classifier version and private model artifact directory. Empty version records classifier unavailability while rules continue. |
+| `CLASSIFIER_DATASET_SELECTION_FILE`, `CLASSIFIER_APPROVAL_KEY` | Explicit signed dataset selection used only by training/evaluation commands. |
+| `CLASSIFIER_SIGNING_KEY`, `CLASSIFIER_ALLOW_SYNTHETIC` | Artifact verification key and debug-only permission to use synthetic models. See the Module 7 guide. |
 
 `DJANGO_DEBUG=0` enables secure session and CSRF cookies. For a real deployment, put a production WSGI/ASGI server behind HTTPS, configure proxy and TLS settings, restrict database connectivity, and back up **both** the database and artifact store. Compose's `runserver` is for development only.
 

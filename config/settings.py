@@ -129,6 +129,12 @@ if DETECTION_INDICATOR_MODE not in {"operational", "synthetic"} or (DETECTION_IN
 DETECTION_AUTH_RESULTS_MODE = os.environ.get("DETECTION_AUTH_RESULTS_MODE", "untrusted_context")
 if DETECTION_AUTH_RESULTS_MODE not in {"untrusted_context", "ignore"}:
     raise ImproperlyConfigured("DETECTION_AUTH_RESULTS_MODE must be untrusted_context or ignore")
+CLASSIFIER_MODEL_ROOT = Path(env("CLASSIFIER_MODEL_ROOT", str(BASE_DIR / "model_artifacts"))).resolve()
+CLASSIFIER_ACTIVE_VERSION = os.environ.get("CLASSIFIER_ACTIVE_VERSION", "")
+CLASSIFIER_DATASET_SELECTION_FILE = os.environ.get("CLASSIFIER_DATASET_SELECTION_FILE", "")
+CLASSIFIER_SIGNING_KEY = os.environ.get("CLASSIFIER_SIGNING_KEY", "")
+CLASSIFIER_APPROVAL_KEY = os.environ.get("CLASSIFIER_APPROVAL_KEY", "")
+CLASSIFIER_ALLOW_SYNTHETIC = env_bool("CLASSIFIER_ALLOW_SYNTHETIC", False) and DEBUG
 CELERY_BEAT_SCHEDULE = {
     "gmail-incremental-poll": {
         "task": "core.tasks.poll_gmail",

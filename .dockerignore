@@ -10,3 +10,5 @@ tmp
 output
 secrets
 snapshots
+datasets
+model_artifacts

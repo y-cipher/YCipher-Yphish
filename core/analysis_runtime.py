@@ -16,12 +16,30 @@ from .models import AnalysisRun, Artifact, EmailCase, Evidence
 from .models import Indicator
 from .indicators import active_snapshots
 from .detection import ENGINE_VERSION, detect, summarize
+from .ml_features import FEATURE_SCHEMA_VERSION, extract_document
 from .services import record_evidence
 
 
 ANALYSIS_KEY = "gmail:parse:v1"
 RULES_KEY = "gmail:rules:v1"
 RUN_KEYS = (ANALYSIS_KEY, RULES_KEY)
+
+
+def _classifier_observation(message):
+    try:
+        from .ml_pipeline import classify_document
+        result = classify_document(extract_document(message))
+        return {"status": result.status, "code": result.code,
+                "probability_phishing": result.probability_phishing,
+                "threshold": result.threshold, "model_version": result.version,
+                "model_sha256": result.model_sha256,
+                "feature_schema": FEATURE_SCHEMA_VERSION}
+    except Exception:
+        # Optional model failures must not interrupt deterministic rule evidence.
+        return {"status": "unavailable", "code": "classifier_runtime_unavailable",
+                "probability_phishing": None, "threshold": None,
+                "model_version": "", "model_sha256": "",
+                "feature_schema": FEATURE_SCHEMA_VERSION}
 
 
 def ensure_analysis_run(case):
@@ -137,6 +155,7 @@ def run_analysis(run_id):
         summary["detection"] = summarize(observations)
         summary["detection"]["indicator_snapshot_ids"] = sorted(str(snapshot.pk) for snapshot in snapshots)
         summary["detection"]["auth_results_mode"] = settings.DETECTION_AUTH_RESULTS_MODE
+        summary["classifier"] = _classifier_observation(message)
     except (OSError, Artifact.DoesNotExist):
         return _fail(run_id, token, "artifact_unavailable", retryable=True)
     except (ValueError, TypeError, LookupError, UnicodeError):
@@ -151,7 +170,7 @@ def run_analysis(run_id):
                 analysis_run=run, idempotency_key="gmail:analysis_headers:v1",
                 source=Evidence.Source.PARSER, label="MIME headers parsed",
                 observed_at=run.started_at, trust=Evidence.Trust.UNTRUSTED,
-                details={key: value for key, value in summary.items() if key != "detection"},
+                details={key: value for key, value in summary.items() if key not in {"detection", "classifier"}},
             )
         for index, item in enumerate(observations):
             record_evidence(
@@ -168,6 +187,16 @@ def run_analysis(run_id):
                 limitations=list(item.limitations),
                 details={"category": item.category, "facts": item.facts},
             )
+        classifier = summary["classifier"]
+        record_evidence(
+            organization=run.case.organization, case=run.case, artifact=artifact,
+            analysis_run=run, idempotency_key=f"gmail:classifier:{run.pk}",
+            source=Evidence.Source.MODEL,
+            label="Classifier probability recorded" if classifier["status"] == "observed" else "Classifier unavailable",
+            observed_at=run.started_at, trust=Evidence.Trust.INTERNAL,
+            state=classifier["status"], source_version=classifier["model_version"],
+            details=classifier,
+        )
         run.state = AnalysisRun.State.SUCCEEDED
         run.summary = summary
         run.engine_version = ENGINE_VERSION

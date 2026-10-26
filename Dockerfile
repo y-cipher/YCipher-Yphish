@@ -9,8 +9,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 RUN useradd --create-home --uid 10001 app \
     && mkdir -p /app/private_artifacts \
-    && chown app:app /app/private_artifacts \
-    && chmod 700 /app/private_artifacts
+    && mkdir -p /app/model_artifacts \
+    && chown app:app /app/private_artifacts /app/model_artifacts \
+    && chmod 700 /app/private_artifacts /app/model_artifacts
 
 EXPOSE 8000
 USER app

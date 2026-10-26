@@ -2,6 +2,7 @@
 .venv/
 .uv-cache/
 .pgtest/
+.test-tmp/
 __pycache__/
 *.py[cod]
 .pytest_cache/
@@ -16,4 +17,7 @@ secrets/*
 !secrets/.gitkeep
 snapshots/*
 !snapshots/.gitkeep
+datasets/*
+!datasets/.gitkeep
+model_artifacts/
 .env.example
