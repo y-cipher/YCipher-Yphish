@@ -16,6 +16,12 @@ from .investigation import (
     execute_investigation, pending_investigation_ids, reconcile_investigations,
 )
 from .models import AnalysisRun, InvestigationRun, Mailbox
+from .models import ActionExecution
+from .response_runtime import (
+    execute_response, pending_response_action_ids, pending_response_case_ids,
+    pending_restoration_case_ids, prepare_response, prepare_restoration,
+    reconcile_response_work,
+)
 
 
 POLLABLE = [
@@ -135,3 +141,39 @@ def dispatch_pending_investigation():
 @shared_task
 def investigate_gmail_case(run_id):
     return execute_investigation(run_id)
+
+
+@shared_task
+def dispatch_pending_response():
+    if not settings.GMAIL_RESPONSE_ENABLED:
+        return 0
+    reconcile_response_work()
+    dispatched = 0
+    for case_id in pending_response_case_ids():
+        prepare_gmail_response.delay(str(case_id))
+        dispatched += 1
+    for case_id in pending_restoration_case_ids():
+        prepare_gmail_restoration.delay(str(case_id))
+        dispatched += 1
+    for action_id in pending_response_action_ids():
+        execute_gmail_response.delay(str(action_id))
+        ActionExecution.objects.filter(pk=action_id).update(last_dispatched_at=timezone.now())
+        dispatched += 1
+    return dispatched
+
+
+@shared_task
+def prepare_gmail_response(case_id):
+    action = prepare_response(case_id)
+    return str(action.pk) if action else None
+
+
+@shared_task
+def prepare_gmail_restoration(case_id):
+    action = prepare_restoration(case_id)
+    return str(action.pk) if action else None
+
+
+@shared_task
+def execute_gmail_response(action_id):
+    return execute_response(action_id)

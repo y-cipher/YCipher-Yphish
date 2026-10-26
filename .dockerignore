@@ -9,6 +9,7 @@ staticfiles
 tmp
 output
 secrets
+response_secrets
 snapshots
 datasets
 model_artifacts

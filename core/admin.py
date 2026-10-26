@@ -11,12 +11,13 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.admin import GroupAdmin, UserAdmin
 from django.contrib.auth.models import Group
 
-from .gmail_credentials import ADMIN_RESPONSE_SCOPE
+from .gmail_credentials import ADMIN_RESPONSE_SCOPE, LABELS_SCOPE
 
 from .models import (
     ActionExecution, AnalysisRun, Artifact, AuditEvent, EmailCase, Evidence,
     Feedback, Indicator, IndicatorSnapshot, InvestigationRun, InvestigationStep,
     Mailbox, Membership, Organization,
+    ResponseControl,
 )
 
 
@@ -137,11 +138,16 @@ class OrganizationAdmin(TenantScopedAdmin):
             values = super().clean()
             client_id = values.get("gmail_response_service_account_client_id", "")
             scope = values.get("gmail_response_scope", "")
-            if bool(client_id) != bool(scope):
-                raise forms.ValidationError("Response client ID and scope must be configured together.")
+            labels_scope = values.get("gmail_response_labels_scope", "")
+            if len({bool(client_id), bool(scope), bool(labels_scope)}) != 1:
+                raise forms.ValidationError("Response client ID and both scopes must be configured together.")
             if scope and scope != ADMIN_RESPONSE_SCOPE:
                 raise forms.ValidationError("Administrator-delegated response requires gmail.modify.restricted.")
-            if client_id and client_id == self.instance.gmail_service_account_client_id:
+            if labels_scope and labels_scope != LABELS_SCOPE:
+                raise forms.ValidationError("Custom label creation requires the exact gmail.labels scope.")
+            if values.get("gmail_response_enabled") and not client_id:
+                raise forms.ValidationError("Configure the separate response identity and both scopes before enabling response.")
+            if client_id and client_id == values.get("gmail_service_account_client_id"):
                 raise forms.ValidationError("Response and ingestion must use separate service-account identities.")
             return values
 
@@ -160,7 +166,7 @@ class OrganizationAdmin(TenantScopedAdmin):
     def get_fields(self, request, obj=None):
         if obj is None:
             return ("name", "slug", "is_active", "retention_days")
-        return ("id", "slug", "name", "is_active", "retention_days", "gmail_service_account_client_id", "gmail_access_verified_at", "gmail_response_service_account_client_id", "gmail_response_scope", "created_at", "updated_at")
+        return ("id", "slug", "name", "is_active", "retention_days", "gmail_service_account_client_id", "gmail_access_verified_at", "gmail_response_enabled", "gmail_response_service_account_client_id", "gmail_response_scope", "gmail_response_labels_scope", "created_at", "updated_at")
 
     def get_readonly_fields(self, request, obj=None):
         return ("id", "slug", "gmail_service_account_client_id", "gmail_access_verified_at", "created_at", "updated_at") if obj else ()
@@ -209,6 +215,7 @@ class MailboxAdmin(TenantScopedAdmin):
             "organization", "address", "display_name", "state",
             "provider", "provider_mailbox_id", "gmail_sync_status", "gmail_enrolled_at", "gmail_enrollment_history_id", "gmail_history_id", "gmail_initial_sync_completed_at", "gmail_last_synced_at", "gmail_last_attempt_at", "gmail_next_sync_at", "gmail_retry_count", "gmail_coverage_gap_from_history_id", "gmail_coverage_gap_detected_at", "gmail_label_id", "last_error_code", "created_at", "updated_at",
             "investigation_sender_context_enabled", "investigation_conversation_enabled",
+            "gmail_response_enabled", "gmail_response_remove_inbox",
         )
 
     def get_readonly_fields(self, request, obj=None):
@@ -309,6 +316,13 @@ class ActionExecutionAdmin(TenantScopedAdmin):
     list_display = ("id", "organization", "case", "action", "state", "requested_at")
     list_select_related = ("organization", "case")
     list_filter = ("action", "state")
+
+
+@admin.register(ResponseControl)
+class ResponseControlAdmin(TenantScopedAdmin):
+    visible_roles = MANAGER_ROLES
+    list_display = ("organization", "mailbox", "operations_in_window", "consecutive_failures", "circuit_open_until")
+    list_select_related = ("organization", "mailbox")
 
 
 @admin.register(Feedback)

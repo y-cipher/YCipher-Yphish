@@ -1,6 +1,6 @@
 # Yphish — Django foundation and Gmail integration
 
-This repository contains the Django/PostgreSQL foundation, direct Google Workspace Gmail ingestion, background synchronization, deterministic evidence, the TF-IDF classifier, and Module 8 bounded investigation. See [Gmail setup](docs/gmail.md), [Module 5 operations](docs/module5-operations.md), [Module 6 detection](docs/module6-detection.md), [Module 7 classifier](docs/module7-classifier.md), and [Module 8 investigation](docs/module8-investigation.md). Mailbox response actions are not implemented.
+This repository contains the Django/PostgreSQL foundation, direct Google Workspace Gmail ingestion, background synchronization, deterministic evidence, the TF-IDF classifier, bounded investigation, and automatic message-level response. See [Gmail setup](docs/gmail.md), [Module 5 operations](docs/module5-operations.md), [Module 6 detection](docs/module6-detection.md), [Module 7 classifier](docs/module7-classifier.md), [Module 8 investigation](docs/module8-investigation.md), and [Module 9 response](docs/module9-response.md).
 
 ## Module 1: run and test
 
@@ -89,7 +89,7 @@ For a POSIX shell, `set -a; . ./.env; set +a` exports a trusted `.env` file into
 | `PRIVATE_ARTIFACT_ROOT` | Private filesystem directory. Compose mounts a named volume at `/app/private_artifacts`. |
 | `RABBITMQ_PASSWORD` | Required Compose broker password, distinct from the database password. |
 | `GOOGLE_INGESTION_SERVICE_ACCOUNT_FILE` | Read-only ingestion service-account JSON path for host execution; Compose mounts `secrets/google-service-account.json`. |
-| `GOOGLE_RESPONSE_SERVICE_ACCOUNT_FILE` | Separate reserved response identity path; Module 4 makes no response calls. |
+| `GOOGLE_RESPONSE_SERVICE_ACCOUNT_FILE` | Separate response identity path used only by the worker for message-level labeling. Compose mounts `response_secrets` only into the worker. |
 | `GMAIL_POLL_INTERVAL_SECONDS`, `GMAIL_ANALYSIS_SWEEP_INTERVAL_SECONDS` | Celery Beat polling and pending-analysis reconciliation intervals. |
 | `GMAIL_ANALYSIS_DISPATCH_BATCH_SIZE`, `GMAIL_ANALYSIS_REDISPATCH_SECONDS`, `GMAIL_ANALYSIS_LEASE_SECONDS` | Analysis outbox dispatch and crash recovery controls. |
 | `GMAIL_RETRY_BASE_SECONDS`, `GMAIL_RETRY_MAX_SECONDS` | Gmail retry backoff with jitter; provider `Retry-After` can be longer. |
@@ -99,6 +99,7 @@ For a POSIX shell, `set -a; . ./.env; set +a` exports a trusted `.env` file into
 | `CLASSIFIER_DATASET_SELECTION_FILE`, `CLASSIFIER_APPROVAL_KEY` | Explicit signed dataset selection used only by training/evaluation commands. |
 | `CLASSIFIER_SIGNING_KEY`, `CLASSIFIER_ALLOW_SYNTHETIC` | Artifact verification key and debug-only permission to use synthetic models. See the Module 7 guide. |
 | `INVESTIGATION_*` | Read-only investigation budgets and optional DNS/context settings. See the Module 8 guide. |
+| `GMAIL_RESPONSE_*` | Global response switch, sweep interval, rate limits, circuit breaker, lease, and maximum case age. See the Module 9 guide. |
 
 `DJANGO_DEBUG=0` enables secure session and CSRF cookies. For a real deployment, put a production WSGI/ASGI server behind HTTPS, configure proxy and TLS settings, restrict database connectivity, and back up **both** the database and artifact store. Compose's `runserver` is for development only.
 

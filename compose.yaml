@@ -67,6 +67,7 @@ services:
       CLASSIFIER_MODEL_ROOT: /app/model_artifacts
       GOOGLE_SERVICE_ACCOUNT_FILE: /run/secrets/google-service-account.json
       GOOGLE_INGESTION_SERVICE_ACCOUNT_FILE: /run/secrets/google-service-account.json
+      GOOGLE_RESPONSE_SERVICE_ACCOUNT_FILE: /run/response-secrets/google-response-service-account.json
       CELERY_BROKER_URL: amqp://yphish:${RABBITMQ_PASSWORD:?Set RABBITMQ_PASSWORD in .env}@rabbitmq:5672//
     depends_on:
       db:
@@ -81,6 +82,7 @@ services:
       - private_artifacts:/app/private_artifacts
       - model_artifacts:/app/model_artifacts
       - ./secrets:/run/secrets:ro
+      - ./response_secrets:/run/response-secrets:ro
 
   beat:
     build: .

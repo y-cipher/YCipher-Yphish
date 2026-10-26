@@ -146,6 +146,14 @@ INVESTIGATION_THREAD_MAX_BYTES = max(1024, min(5_000_000, int(os.environ.get("IN
 INVESTIGATION_THREAD_MAX_AGE_DAYS = max(1, min(365, int(os.environ.get("INVESTIGATION_THREAD_MAX_AGE_DAYS", "30"))))
 INVESTIGATION_SENDER_MAX_CASES = max(1, min(1000, int(os.environ.get("INVESTIGATION_SENDER_MAX_CASES", "100"))))
 INVESTIGATION_SWEEP_INTERVAL_SECONDS = max(10, int(os.environ.get("INVESTIGATION_SWEEP_INTERVAL_SECONDS", "30")))
+GMAIL_RESPONSE_ENABLED = env_bool("GMAIL_RESPONSE_ENABLED", True)
+GMAIL_RESPONSE_SWEEP_INTERVAL_SECONDS = max(10, int(os.environ.get("GMAIL_RESPONSE_SWEEP_INTERVAL_SECONDS", "30")))
+GMAIL_RESPONSE_ORG_HOURLY_LIMIT = max(1, int(os.environ.get("GMAIL_RESPONSE_ORG_HOURLY_LIMIT", "100")))
+GMAIL_RESPONSE_MAILBOX_HOURLY_LIMIT = max(1, int(os.environ.get("GMAIL_RESPONSE_MAILBOX_HOURLY_LIMIT", "20")))
+GMAIL_RESPONSE_FAILURE_THRESHOLD = max(1, int(os.environ.get("GMAIL_RESPONSE_FAILURE_THRESHOLD", "5")))
+GMAIL_RESPONSE_CIRCUIT_SECONDS = max(60, int(os.environ.get("GMAIL_RESPONSE_CIRCUIT_SECONDS", "1800")))
+GMAIL_RESPONSE_LEASE_SECONDS = max(30, int(os.environ.get("GMAIL_RESPONSE_LEASE_SECONDS", "180")))
+GMAIL_RESPONSE_MAX_CASE_AGE_HOURS = max(1, int(os.environ.get("GMAIL_RESPONSE_MAX_CASE_AGE_HOURS", "24")))
 CELERY_BEAT_SCHEDULE = {
     "gmail-incremental-poll": {
         "task": "core.tasks.poll_gmail",
@@ -158,6 +166,10 @@ CELERY_BEAT_SCHEDULE = {
     "gmail-investigation-reconciliation": {
         "task": "core.tasks.dispatch_pending_investigation",
         "schedule": float(INVESTIGATION_SWEEP_INTERVAL_SECONDS),
+    },
+    "gmail-response-reconciliation": {
+        "task": "core.tasks.dispatch_pending_response",
+        "schedule": float(GMAIL_RESPONSE_SWEEP_INTERVAL_SECONDS),
     },
 }
 STORAGES = {

@@ -15,7 +15,7 @@ from httplib2 import Response
 
 from .gmail import GmailClient, GmailError, GmailHistoryExpired
 from .gmail_credentials import (
-    ADMIN_RESPONSE_SCOPE, INGESTION_SCOPE, CredentialProviderError,
+    ADMIN_RESPONSE_SCOPE, INGESTION_SCOPE, LABELS_SCOPE, CredentialProviderError,
     CredentialPurpose, WorkspaceDelegatedCredentialProvider,
 )
 from .gmail_runtime import ingest_message, sync_mailbox
@@ -167,8 +167,11 @@ class GmailClientTests(TestCase):
                 pending.pk, CredentialPurpose.INGESTION,
             )
         self.org.gmail_response_scope = "https://www.googleapis.com/auth/gmail.modify"
+        self.org.gmail_response_enabled = True
         self.org.gmail_response_service_account_client_id = "response-client"
-        self.org.save(update_fields=["gmail_response_scope", "gmail_response_service_account_client_id"])
+        self.org.save(update_fields=["gmail_response_scope", "gmail_response_enabled", "gmail_response_service_account_client_id"])
+        self.mailbox.gmail_response_enabled = True
+        self.mailbox.save(update_fields=["gmail_response_enabled"])
         with self.assertRaises(CredentialProviderError) as caught:
             WorkspaceDelegatedCredentialProvider().for_mailbox(
                 self.mailbox.pk, CredentialPurpose.RESPONSE,
@@ -202,10 +205,14 @@ class GmailClientTests(TestCase):
         self.assertEqual(credentials.subject, self.mailbox.address)
         self.assertNotEqual(INGESTION_SCOPE, ADMIN_RESPONSE_SCOPE)
 
-    def test_future_response_identity_requires_separate_key_and_exact_scope(self):
+    def test_response_identity_requires_separate_key_and_exact_scopes(self):
         self.org.gmail_response_scope = ADMIN_RESPONSE_SCOPE
+        self.org.gmail_response_labels_scope = LABELS_SCOPE
+        self.org.gmail_response_enabled = True
         self.org.gmail_response_service_account_client_id = "response-client"
-        self.org.save(update_fields=["gmail_response_scope", "gmail_response_service_account_client_id"])
+        self.org.save(update_fields=["gmail_response_scope", "gmail_response_labels_scope", "gmail_response_enabled", "gmail_response_service_account_client_id"])
+        self.mailbox.gmail_response_enabled = True
+        self.mailbox.save(update_fields=["gmail_response_enabled"])
         with tempfile.TemporaryDirectory() as directory:
             ingestion_path = os.path.join(directory, "ingestion.json")
             response_path = os.path.join(directory, "response.json")
@@ -229,7 +236,7 @@ class GmailClientTests(TestCase):
                 credentials = WorkspaceDelegatedCredentialProvider().for_mailbox(
                     self.mailbox.pk, CredentialPurpose.RESPONSE,
                 )
-        self.assertEqual(requested, [[ADMIN_RESPONSE_SCOPE]])
+        self.assertEqual(requested, [[ADMIN_RESPONSE_SCOPE, LABELS_SCOPE]])
         self.assertEqual(credentials.subject, self.mailbox.address)
 
 

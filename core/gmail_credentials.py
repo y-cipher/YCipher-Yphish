@@ -1,4 +1,4 @@
-"""Delegated identities for Gmail ingestion and future response work.
+"""Delegated identities for Gmail ingestion and message-level response.
 
 The interface accepts a persisted mailbox ID, never a caller-supplied subject.
 No key material or access token is stored in a model or emitted in an error.
@@ -16,6 +16,7 @@ from .models import Mailbox
 
 INGESTION_SCOPE = "https://www.googleapis.com/auth/gmail.readonly"
 ADMIN_RESPONSE_SCOPE = "https://www.googleapis.com/auth/gmail.modify.restricted"
+LABELS_SCOPE = "https://www.googleapis.com/auth/gmail.labels"
 
 
 class CredentialPurpose(StrEnum):
@@ -74,11 +75,15 @@ class WorkspaceDelegatedCredentialProvider:
             expected_client_id = organization.gmail_service_account_client_id
             scope = INGESTION_SCOPE
         else:
+            if not organization.gmail_response_enabled or not mailbox.gmail_response_enabled:
+                raise CredentialProviderError("gmail_response_not_enabled")
             path = settings.GOOGLE_RESPONSE_SERVICE_ACCOUNT_FILE
             expected_client_id = organization.gmail_response_service_account_client_id
             scope = organization.gmail_response_scope
             if scope != ADMIN_RESPONSE_SCOPE:
                 raise CredentialProviderError("gmail_response_scope_invalid")
+            if organization.gmail_response_labels_scope != LABELS_SCOPE:
+                raise CredentialProviderError("gmail_response_labels_scope_invalid")
             if not path or path == settings.GOOGLE_INGESTION_SERVICE_ACCOUNT_FILE:
                 raise CredentialProviderError("gmail_response_identity_not_separate")
             if not expected_client_id or expected_client_id == organization.gmail_service_account_client_id:
@@ -91,7 +96,7 @@ class WorkspaceDelegatedCredentialProvider:
             if str(info["client_id"]) != expected_client_id:
                 raise CredentialProviderError("gmail_client_id_mismatch")
             return service_account.Credentials.from_service_account_info(
-                info, scopes=[scope],
+                info, scopes=[scope, LABELS_SCOPE] if purpose == CredentialPurpose.RESPONSE else [scope],
             ).with_subject(mailbox.address)
         except CredentialProviderError:
             raise

@@ -39,6 +39,7 @@ class Organization(UUIDModel):
     gmail_response_enabled = models.BooleanField(default=False)
     gmail_response_service_account_client_id = models.CharField(max_length=255, blank=True)
     gmail_response_scope = models.CharField(max_length=255, blank=True)
+    gmail_response_labels_scope = models.CharField(max_length=255, blank=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
@@ -115,6 +116,8 @@ class Mailbox(UUIDModel):
     gmail_coverage_gap_detected_at = models.DateTimeField(null=True, blank=True)
     investigation_sender_context_enabled = models.BooleanField(default=False)
     investigation_conversation_enabled = models.BooleanField(default=False)
+    gmail_response_enabled = models.BooleanField(default=False)
+    gmail_response_remove_inbox = models.BooleanField(default=False)
     state = models.CharField(max_length=16, choices=State.choices, default=State.PENDING)
     last_error_code = models.CharField(max_length=100, blank=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -471,6 +474,11 @@ class ActionExecution(UUIDModel):
     executed_at = models.DateTimeField(null=True, blank=True)
     verified_at = models.DateTimeField(null=True, blank=True)
     error_code = models.CharField(max_length=100, blank=True)
+    lease_token = models.UUIDField(null=True, blank=True)
+    lease_expires_at = models.DateTimeField(null=True, blank=True)
+    next_retry_at = models.DateTimeField(null=True, blank=True)
+    last_dispatched_at = models.DateTimeField(null=True, blank=True)
+    retry_count = models.PositiveIntegerField(default=0)
 
     class Meta:
         constraints = [
@@ -484,7 +492,26 @@ class ActionExecution(UUIDModel):
                 name="action_failure_code_required",
             ),
         ]
-        indexes = [models.Index(fields=["organization", "case", "-requested_at"], name="action_case_requested_idx")]
+        indexes = [models.Index(fields=["organization", "case", "-requested_at"], name="action_case_requested_idx"),
+                   models.Index(fields=["state", "next_retry_at"], name="action_response_due_idx")]
+
+
+class ResponseControl(UUIDModel):
+    """Serializable per-organization and per-mailbox rate/circuit state."""
+
+    organization = models.ForeignKey(Organization, on_delete=models.PROTECT, related_name="response_controls")
+    mailbox = models.ForeignKey(Mailbox, on_delete=models.PROTECT, null=True, blank=True, related_name="response_controls")
+    window_started_at = models.DateTimeField(null=True, blank=True)
+    operations_in_window = models.PositiveIntegerField(default=0)
+    consecutive_failures = models.PositiveIntegerField(default=0)
+    circuit_open_until = models.DateTimeField(null=True, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=["organization"], condition=Q(mailbox__isnull=True), name="response_org_control_unique"),
+            models.UniqueConstraint(fields=["organization", "mailbox"], condition=Q(mailbox__isnull=False), name="response_mailbox_control_unique"),
+        ]
 
 
 class Feedback(UUIDModel):
