@@ -15,7 +15,8 @@ from .gmail_credentials import ADMIN_RESPONSE_SCOPE
 
 from .models import (
     ActionExecution, AnalysisRun, Artifact, AuditEvent, EmailCase, Evidence,
-    Feedback, Indicator, IndicatorSnapshot, Mailbox, Membership, Organization,
+    Feedback, Indicator, IndicatorSnapshot, InvestigationRun, InvestigationStep,
+    Mailbox, Membership, Organization,
 )
 
 
@@ -207,6 +208,7 @@ class MailboxAdmin(TenantScopedAdmin):
         return (
             "organization", "address", "display_name", "state",
             "provider", "provider_mailbox_id", "gmail_sync_status", "gmail_enrolled_at", "gmail_enrollment_history_id", "gmail_history_id", "gmail_initial_sync_completed_at", "gmail_last_synced_at", "gmail_last_attempt_at", "gmail_next_sync_at", "gmail_retry_count", "gmail_coverage_gap_from_history_id", "gmail_coverage_gap_detected_at", "gmail_label_id", "last_error_code", "created_at", "updated_at",
+            "investigation_sender_context_enabled", "investigation_conversation_enabled",
         )
 
     def get_readonly_fields(self, request, obj=None):
@@ -280,6 +282,26 @@ class EvidenceAdmin(TenantScopedAdmin):
     list_display = ("id", "organization", "case", "source", "state", "observed_at")
     list_select_related = ("organization", "case")
     list_filter = ("source", "state", "trust")
+
+
+@admin.register(InvestigationRun)
+class InvestigationRunAdmin(TenantScopedAdmin):
+    visible_roles = INVESTIGATOR_ROLES
+    list_display = ("id", "organization", "mailbox", "case", "state", "stopping_reason", "calls_used")
+    list_select_related = ("organization", "mailbox", "case")
+    list_filter = ("state", "stopping_reason")
+
+
+@admin.register(InvestigationStep)
+class InvestigationStepAdmin(TenantScopedAdmin):
+    visible_roles = INVESTIGATOR_ROLES
+    organization_lookup = "investigation__organization_id"
+    list_display = ("id", "investigation", "call_number", "tool_id", "state", "finished_at")
+    list_select_related = ("investigation",)
+    list_filter = ("tool_id", "state")
+
+    def _organization_id(self, obj):
+        return obj.investigation.organization_id
 
 
 @admin.register(ActionExecution)

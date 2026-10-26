@@ -12,7 +12,10 @@ from django.utils import timezone
 from .analysis_runtime import pending_analysis_ids, reconcile_analysis, run_analysis
 from .gmail import GmailError
 from .gmail_runtime import sync_mailbox
-from .models import AnalysisRun, Mailbox
+from .investigation import (
+    execute_investigation, pending_investigation_ids, reconcile_investigations,
+)
+from .models import AnalysisRun, InvestigationRun, Mailbox
 
 
 POLLABLE = [
@@ -112,3 +115,23 @@ def dispatch_pending_analysis():
 @shared_task
 def analyze_gmail_case(run_id):
     return run_analysis(run_id)
+
+
+@shared_task
+def dispatch_pending_investigation():
+    if not settings.INVESTIGATION_ENABLED:
+        return 0
+    reconcile_investigations()
+    dispatched = 0
+    for run_id in pending_investigation_ids():
+        investigate_gmail_case.delay(str(run_id))
+        InvestigationRun.objects.filter(pk=run_id, state=InvestigationRun.State.QUEUED).update(
+            last_dispatched_at=timezone.now(),
+        )
+        dispatched += 1
+    return dispatched
+
+
+@shared_task
+def investigate_gmail_case(run_id):
+    return execute_investigation(run_id)

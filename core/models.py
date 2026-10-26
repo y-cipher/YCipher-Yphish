@@ -113,6 +113,8 @@ class Mailbox(UUIDModel):
     gmail_initial_sync_completed_at = models.DateTimeField(null=True, blank=True)
     gmail_coverage_gap_from_history_id = models.CharField(max_length=64, blank=True)
     gmail_coverage_gap_detected_at = models.DateTimeField(null=True, blank=True)
+    investigation_sender_context_enabled = models.BooleanField(default=False)
+    investigation_conversation_enabled = models.BooleanField(default=False)
     state = models.CharField(max_length=16, choices=State.choices, default=State.PENDING)
     last_error_code = models.CharField(max_length=100, blank=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -284,6 +286,67 @@ class AnalysisRun(UUIDModel):
             ),
         ]
         indexes = [models.Index(fields=["organization", "state", "-created_at"], name="run_org_state_created_idx"), models.Index(fields=["state", "next_retry_at"], name="run_due_retry_idx")]
+
+
+class InvestigationRun(UUIDModel):
+    class State(models.TextChoices):
+        QUEUED = "queued", "Queued"
+        RUNNING = "running", "Running"
+        COMPLETED = "completed", "Completed"
+        FAILED = "failed", "Failed"
+
+    organization = models.ForeignKey(Organization, on_delete=models.PROTECT, related_name="investigations")
+    mailbox = models.ForeignKey(Mailbox, on_delete=models.PROTECT, related_name="investigations")
+    case = models.ForeignKey(EmailCase, on_delete=models.PROTECT, related_name="investigations")
+    analysis_run = models.ForeignKey(AnalysisRun, on_delete=models.PROTECT, related_name="investigations")
+    policy_version = models.CharField(max_length=50, default="explicit-v1")
+    state = models.CharField(max_length=16, choices=State.choices, default=State.QUEUED)
+    rounds_used = models.PositiveSmallIntegerField(default=0)
+    calls_used = models.PositiveSmallIntegerField(default=0)
+    stopping_reason = models.CharField(max_length=100, blank=True)
+    error_code = models.CharField(max_length=100, blank=True)
+    started_at = models.DateTimeField(null=True, blank=True)
+    finished_at = models.DateTimeField(null=True, blank=True)
+    lease_token = models.UUIDField(null=True, blank=True)
+    lease_expires_at = models.DateTimeField(null=True, blank=True)
+    last_dispatched_at = models.DateTimeField(null=True, blank=True)
+    summary = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=["case", "policy_version"], name="investigation_case_policy_unique"),
+            models.CheckConstraint(condition=Q(state__in=["queued", "running", "completed", "failed"]), name="investigation_state_valid"),
+            models.CheckConstraint(condition=Q(finished_at__isnull=True) | Q(state__in=["completed", "failed"]), name="investigation_finish_state_valid"),
+        ]
+        indexes = [models.Index(fields=["state", "last_dispatched_at"], name="investigation_dispatch_idx")]
+
+
+class InvestigationStep(UUIDModel):
+    class State(models.TextChoices):
+        OBSERVED = "observed", "Observed"
+        UNAVAILABLE = "unavailable", "Unavailable"
+        ERROR = "error", "Error"
+        REJECTED = "rejected", "Rejected"
+
+    investigation = models.ForeignKey(InvestigationRun, on_delete=models.PROTECT, related_name="steps")
+    round_number = models.PositiveSmallIntegerField()
+    call_number = models.PositiveSmallIntegerField()
+    tool_id = models.CharField(max_length=40)
+    arguments = models.JSONField(default=dict)
+    result = models.JSONField(default=dict)
+    limitations = models.JSONField(default=list)
+    state = models.CharField(max_length=16, choices=State.choices)
+    state_hash = models.CharField(max_length=64)
+    started_at = models.DateTimeField()
+    finished_at = models.DateTimeField()
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=["investigation", "call_number"], name="investigation_step_number_unique"),
+            models.UniqueConstraint(fields=["investigation", "state_hash"], name="investigation_step_state_unique"),
+            models.CheckConstraint(condition=Q(round_number__gte=1) & Q(call_number__gte=1), name="investigation_step_numbers_valid"),
+            models.CheckConstraint(condition=Q(state__in=["observed", "unavailable", "error", "rejected"]), name="investigation_step_state_valid"),
+        ]
 
 
 class Evidence(UUIDModel):

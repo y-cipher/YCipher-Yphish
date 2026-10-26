@@ -213,6 +213,13 @@ def run_analysis(run_id):
             EmailCase.objects.filter(pk=run.case_id, state=EmailCase.State.QUEUED).update(
                 state=EmailCase.State.ANALYZED, last_error_code="",
             )
+        if settings.INVESTIGATION_ENABLED and not run.case.gmail_is_historical:
+            from .investigation import InvestigationAccessError, ensure_investigation_run
+            try:
+                ensure_investigation_run(run.case, run)
+            except InvestigationAccessError:
+                # A mailbox de-enrolled during analysis is not investigated.
+                pass
     return True
 
 

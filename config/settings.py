@@ -135,6 +135,17 @@ CLASSIFIER_DATASET_SELECTION_FILE = os.environ.get("CLASSIFIER_DATASET_SELECTION
 CLASSIFIER_SIGNING_KEY = os.environ.get("CLASSIFIER_SIGNING_KEY", "")
 CLASSIFIER_APPROVAL_KEY = os.environ.get("CLASSIFIER_APPROVAL_KEY", "")
 CLASSIFIER_ALLOW_SYNTHETIC = env_bool("CLASSIFIER_ALLOW_SYNTHETIC", False) and DEBUG
+INVESTIGATION_ENABLED = env_bool("INVESTIGATION_ENABLED", True)
+INVESTIGATION_DNS_ENABLED = env_bool("INVESTIGATION_DNS_ENABLED", False)
+INVESTIGATION_MAX_ROUNDS = max(1, min(10, int(os.environ.get("INVESTIGATION_MAX_ROUNDS", "4"))))
+INVESTIGATION_MAX_CALLS = max(1, min(10, int(os.environ.get("INVESTIGATION_MAX_CALLS", "4"))))
+INVESTIGATION_TIMEOUT_SECONDS = max(1, min(120, int(os.environ.get("INVESTIGATION_TIMEOUT_SECONDS", "20"))))
+INVESTIGATION_TOOL_TIMEOUT_SECONDS = max(1, min(10, int(os.environ.get("INVESTIGATION_TOOL_TIMEOUT_SECONDS", "3"))))
+INVESTIGATION_THREAD_MAX_MESSAGES = max(1, min(20, int(os.environ.get("INVESTIGATION_THREAD_MAX_MESSAGES", "5"))))
+INVESTIGATION_THREAD_MAX_BYTES = max(1024, min(5_000_000, int(os.environ.get("INVESTIGATION_THREAD_MAX_BYTES", "262144"))))
+INVESTIGATION_THREAD_MAX_AGE_DAYS = max(1, min(365, int(os.environ.get("INVESTIGATION_THREAD_MAX_AGE_DAYS", "30"))))
+INVESTIGATION_SENDER_MAX_CASES = max(1, min(1000, int(os.environ.get("INVESTIGATION_SENDER_MAX_CASES", "100"))))
+INVESTIGATION_SWEEP_INTERVAL_SECONDS = max(10, int(os.environ.get("INVESTIGATION_SWEEP_INTERVAL_SECONDS", "30")))
 CELERY_BEAT_SCHEDULE = {
     "gmail-incremental-poll": {
         "task": "core.tasks.poll_gmail",
@@ -143,6 +154,10 @@ CELERY_BEAT_SCHEDULE = {
     "gmail-analysis-reconciliation": {
         "task": "core.tasks.dispatch_pending_analysis",
         "schedule": float(GMAIL_ANALYSIS_SWEEP_INTERVAL_SECONDS),
+    },
+    "gmail-investigation-reconciliation": {
+        "task": "core.tasks.dispatch_pending_investigation",
+        "schedule": float(INVESTIGATION_SWEEP_INTERVAL_SECONDS),
     },
 }
 STORAGES = {

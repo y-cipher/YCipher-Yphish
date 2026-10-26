@@ -6,3 +6,4 @@ google-api-python-client>=2.150,<3
 requests>=2.32,<3
 scikit-learn>=1.6,<2
 joblib>=1.4,<2
+dnspython>=2.7,<3

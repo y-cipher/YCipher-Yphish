@@ -1,6 +1,6 @@
 # Yphish — Django foundation and Gmail integration
 
-This repository contains the Django/PostgreSQL foundation, direct Google Workspace Gmail ingestion, Module 5 Celery/RabbitMQ synchronization, Module 6 deterministic detection evidence, and the Module 7 TF-IDF classifier. See [Gmail setup](docs/gmail.md), [Module 5 operations](docs/module5-operations.md), [Module 6 detection](docs/module6-detection.md), and [Module 7 classifier](docs/module7-classifier.md). Mailbox response actions are not implemented.
+This repository contains the Django/PostgreSQL foundation, direct Google Workspace Gmail ingestion, background synchronization, deterministic evidence, the TF-IDF classifier, and Module 8 bounded investigation. See [Gmail setup](docs/gmail.md), [Module 5 operations](docs/module5-operations.md), [Module 6 detection](docs/module6-detection.md), [Module 7 classifier](docs/module7-classifier.md), and [Module 8 investigation](docs/module8-investigation.md). Mailbox response actions are not implemented.
 
 ## Module 1: run and test
 
@@ -98,6 +98,7 @@ For a POSIX shell, `set -a; . ./.env; set +a` exports a trusted `.env` file into
 | `CLASSIFIER_ACTIVE_VERSION`, `CLASSIFIER_MODEL_ROOT` | Optional signed classifier version and private model artifact directory. Empty version records classifier unavailability while rules continue. |
 | `CLASSIFIER_DATASET_SELECTION_FILE`, `CLASSIFIER_APPROVAL_KEY` | Explicit signed dataset selection used only by training/evaluation commands. |
 | `CLASSIFIER_SIGNING_KEY`, `CLASSIFIER_ALLOW_SYNTHETIC` | Artifact verification key and debug-only permission to use synthetic models. See the Module 7 guide. |
+| `INVESTIGATION_*` | Read-only investigation budgets and optional DNS/context settings. See the Module 8 guide. |
 
 `DJANGO_DEBUG=0` enables secure session and CSRF cookies. For a real deployment, put a production WSGI/ASGI server behind HTTPS, configure proxy and TLS settings, restrict database connectivity, and back up **both** the database and artifact store. Compose's `runserver` is for development only.
 
@@ -111,7 +112,7 @@ See [the complete model and constraint reference](docs/data-model.md) for every 
 - `Artifact` holds a private file, its SHA-256 digest, size, kind, and storage state (`pending`, `stored`, `failed`, `deleted`). `AnalysisRun` tracks attempts; `Evidence` records sourced observations and unavailable/error outcomes.
 - `ActionExecution` records an intended or executed response and its idempotency key. `Feedback` records proposed corrections. `AuditEvent` records history and is append-only at the database level.
 
-The initial migration creates PostgreSQL unique/check constraints and query indexes. The second migration adds tenant relationship triggers. The third adds idempotency keys and failure-state constraints. The fourth adds Gmail identity fields; the fifth adds enrollment boundaries, sync status, gap visibility, label IDs, and internalDate while preserving legacy rows. The sixth adds queue leases, retry timing, deletion tombstones, and explicit integration states. The seventh adds structured rule evidence fields and timestamped indicator snapshots. Mailbox addresses are case-insensitively unique per organization. Gmail message IDs are unique within each organization and mailbox.
+The initial migration creates PostgreSQL unique/check constraints and query indexes. The second migration adds tenant relationship triggers. The third adds idempotency keys and failure-state constraints. The fourth adds Gmail identity fields; the fifth adds enrollment boundaries, sync status, gap visibility, label IDs, and internalDate while preserving legacy rows. The sixth adds queue leases, retry timing, deletion tombstones, and explicit integration states. The seventh adds structured rule evidence fields and timestamped indicator snapshots. Migrations eight and nine add bounded investigation records, mailbox context approvals, and investigation tenant guards. Mailbox addresses are case-insensitively unique per organization. Gmail message IDs are unique within each organization and mailbox.
 
 The models establish persistence and legal states, and the service guards the failure and skipped transitions described below. Read-only Gmail polling is documented in the [Gmail guide](docs/gmail.md). Mailbox response execution is outside Module 4.
 
