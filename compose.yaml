@@ -29,11 +29,17 @@ services:
       db:
         condition: service_healthy
     command: sh -c "python manage.py migrate --noinput && python manage.py runserver 0.0.0.0:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
     ports:
       - "127.0.0.1:8000:8000"
     volumes:
       - private_artifacts:/app/private_artifacts
       - ./secrets:/run/secrets:ro
+      - ./snapshots:/app/snapshots:ro
 
   rabbitmq:
     image: rabbitmq:3.13-alpine
@@ -62,7 +68,10 @@ services:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
+      web:
+        condition: service_healthy
     command: celery -A config worker -l WARNING --concurrency=2
+    stop_grace_period: 6m
     volumes:
       - private_artifacts:/app/private_artifacts
       - ./secrets:/run/secrets:ro
@@ -76,6 +85,8 @@ services:
       CELERY_BROKER_URL: amqp://yphish:${RABBITMQ_PASSWORD:?Set RABBITMQ_PASSWORD in .env}@rabbitmq:5672//
     depends_on:
       rabbitmq:
+        condition: service_healthy
+      web:
         condition: service_healthy
     command: celery -A config beat -l WARNING --schedule /tmp/celerybeat-schedule
 

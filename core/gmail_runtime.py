@@ -13,6 +13,7 @@ from django.utils import timezone
 
 from .gmail import GmailClient, GmailError, GmailHistoryExpired
 from .gmail_credentials import CredentialProviderError, enrolled_mailbox
+from .analysis_runtime import ensure_analysis_run
 from .models import Artifact, AuditEvent, EmailCase, Evidence, Mailbox
 from .services import create_email_case, record_evidence
 
@@ -101,13 +102,13 @@ def ingest_message(mailbox_id, gmail_message_id, *, client=None, historical=Fals
             trust=Evidence.Trust.INTERNAL,
             details={"size_bytes": artifact.size_bytes, "sha256": artifact.sha256},
         )
-        record_evidence(
-            organization=mailbox.organization, case=case, artifact=artifact,
-            idempotency_key="gmail:headers:v1", source=Evidence.Source.PARSER,
-            label="MIME headers parsed", observed_at=artifact.created_at,
-            trust=Evidence.Trust.UNTRUSTED,
-            details={"has_message_id_header": bool(case.internet_message_id), "has_sender": bool(case.sender_address)},
-        )
+        if case.gmail_deleted_at:
+            case.gmail_deleted_at = None
+            case.save(update_fields=["gmail_deleted_at", "updated_at"])
+        # The durable run is the outbox. No broker publish occurs in this
+        # transaction; a periodic sweep dispatches after commit.
+        if not case.gmail_is_historical:
+            ensure_analysis_run(case)
         return case
 
 
@@ -118,6 +119,29 @@ def _unavailable(mailbox, message_id, phase):
         organization=mailbox.organization, event_type="gmail.message_unavailable",
         subject_type="mailbox", subject_id=mailbox.pk, occurred_at=timezone.now(),
         details={"gmail_message_id": message_id, "phase": phase},
+    )
+
+
+def _mark_deleted(mailbox, message_id):
+    # A tombstone affects only a previously observed message. A deleted
+    # message seen first in history has no MIME to preserve or analyze.
+    EmailCase.objects.filter(
+        mailbox=mailbox, organization=mailbox.organization,
+        gmail_message_id=message_id, gmail_deleted_at__isnull=True,
+    ).update(gmail_deleted_at=timezone.now())
+
+
+def _refresh_labels(mailbox, client, message_id):
+    case = EmailCase.objects.filter(
+        organization=mailbox.organization, mailbox=mailbox,
+        gmail_message_id=message_id,
+    ).first()
+    if not case:
+        return
+    data = client.get_message_metadata(message_id)
+    _thread, labels, _date = _provider_metadata(data)
+    EmailCase.objects.filter(pk=case.pk).update(
+        gmail_label_ids=labels, gmail_deleted_at=None,
     )
 
 
@@ -144,7 +168,15 @@ def _history_catchup(mailbox, client, start_history_id):
         if message_id is None:
             completed_cursor = kind
             continue
+        if kind == "deleted":
+            _mark_deleted(mailbox, message_id)
+            count += 1
+            continue
         try:
+            if kind == "labels":
+                _refresh_labels(mailbox, client, message_id)
+                count += 1
+                continue
             ingest_message(
                 mailbox.pk, message_id, client=client,
                 historical=kind != "added",
@@ -154,6 +186,7 @@ def _history_catchup(mailbox, client, start_history_id):
         except GmailError as exc:
             if exc.code != "gmail_http_404":
                 raise
+            _mark_deleted(mailbox, message_id)
             _unavailable(mailbox, message_id, "history")
     if not completed_cursor:
         raise GmailError("gmail_history_cursor_missing", retryable=True)
@@ -247,6 +280,9 @@ def sync_mailbox(mailbox_id, *, client=None):
                 raise GmailError("gmail_sync_state_changed", retryable=True)
             current.gmail_history_id = completed_cursor
             current.gmail_last_synced_at = timezone.now()
+            current.gmail_last_attempt_at = current.gmail_last_synced_at
+            current.gmail_next_sync_at = None
+            current.gmail_retry_count = 0
             if initializing:
                 current.gmail_initial_sync_completed_at = current.gmail_last_synced_at
             current.gmail_sync_status = (
@@ -257,6 +293,7 @@ def sync_mailbox(mailbox_id, *, client=None):
             current.last_error_code = ""
             current.save(update_fields=[
                 "gmail_history_id", "gmail_last_synced_at", "gmail_initial_sync_completed_at",
-                "gmail_sync_status", "last_error_code", "updated_at",
+                "gmail_sync_status", "last_error_code", "gmail_last_attempt_at",
+                "gmail_next_sync_at", "gmail_retry_count", "updated_at",
             ])
         return count

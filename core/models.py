@@ -91,6 +91,10 @@ class Mailbox(UUIDModel):
         READY = "ready", "Incremental synchronization"
         COVERAGE_GAP = "coverage_gap", "Coverage gap"
         ERROR = "error", "Synchronization error"
+        DISCONNECTED = "disconnected", "Network disconnected"
+        AUTHORIZATION_FAILED = "authorization_failed", "Authorization failed"
+        THROTTLED = "throttled", "Provider throttled"
+        UNAVAILABLE = "unavailable", "Provider unavailable"
 
     organization = models.ForeignKey(Organization, on_delete=models.PROTECT, related_name="mailboxes")
     address = models.EmailField(max_length=320)
@@ -100,6 +104,9 @@ class Mailbox(UUIDModel):
     gmail_history_id = models.CharField(max_length=64, blank=True)
     gmail_label_id = models.CharField(max_length=255, blank=True)
     gmail_last_synced_at = models.DateTimeField(null=True, blank=True)
+    gmail_last_attempt_at = models.DateTimeField(null=True, blank=True)
+    gmail_next_sync_at = models.DateTimeField(null=True, blank=True)
+    gmail_retry_count = models.PositiveIntegerField(default=0)
     gmail_sync_status = models.CharField(max_length=20, choices=GmailSyncStatus.choices, default=GmailSyncStatus.NOT_ENROLLED)
     gmail_enrolled_at = models.DateTimeField(null=True, blank=True)
     gmail_enrollment_history_id = models.CharField(max_length=64, blank=True)
@@ -120,9 +127,9 @@ class Mailbox(UUIDModel):
             ),
             models.CheckConstraint(condition=Q(state__in=["pending", "active", "paused", "error"]), name="mailbox_state_valid"),
             models.CheckConstraint(condition=Q(provider__in=["legacy", "gmail"]), name="mailbox_provider_valid"),
-            models.CheckConstraint(condition=Q(gmail_sync_status__in=["not_enrolled", "enrolling", "initializing", "ready", "coverage_gap", "error"]), name="mailbox_gmail_sync_status_valid"),
+            models.CheckConstraint(condition=Q(gmail_sync_status__in=["not_enrolled", "enrolling", "initializing", "ready", "coverage_gap", "error", "disconnected", "authorization_failed", "throttled", "unavailable"]), name="mailbox_gmail_sync_status_valid"),
         ]
-        indexes = [models.Index(fields=["organization", "state"], name="mailbox_org_state_idx")]
+        indexes = [models.Index(fields=["organization", "state"], name="mailbox_org_state_idx"), models.Index(fields=["gmail_sync_status", "gmail_next_sync_at"], name="mailbox_gmail_due_idx")]
 
     def __str__(self):
         return self.address
@@ -154,6 +161,7 @@ class EmailCase(UUIDModel):
     gmail_label_ids = models.JSONField(default=list, blank=True)
     gmail_internal_date_ms = models.CharField(max_length=32, blank=True)
     gmail_is_historical = models.BooleanField(default=False)
+    gmail_deleted_at = models.DateTimeField(null=True, blank=True)
     internet_message_id = models.CharField(max_length=512, blank=True)
     subject = models.CharField(max_length=998, blank=True)
     sender_address = models.EmailField(max_length=320, blank=True)
@@ -258,6 +266,11 @@ class AnalysisRun(UUIDModel):
     finished_at = models.DateTimeField(null=True, blank=True)
     summary = models.JSONField(default=dict, blank=True)
     error_code = models.CharField(max_length=100, blank=True)
+    lease_expires_at = models.DateTimeField(null=True, blank=True)
+    lease_token = models.UUIDField(null=True, blank=True)
+    next_retry_at = models.DateTimeField(null=True, blank=True)
+    last_dispatched_at = models.DateTimeField(null=True, blank=True)
+    retry_count = models.PositiveIntegerField(default=0)
 
     class Meta:
         constraints = [
@@ -270,7 +283,7 @@ class AnalysisRun(UUIDModel):
                 name="run_finish_state_valid",
             ),
         ]
-        indexes = [models.Index(fields=["organization", "state", "-created_at"], name="run_org_state_created_idx")]
+        indexes = [models.Index(fields=["organization", "state", "-created_at"], name="run_org_state_created_idx"), models.Index(fields=["state", "next_retry_at"], name="run_due_retry_idx")]
 
 
 class Evidence(UUIDModel):
@@ -299,6 +312,11 @@ class Evidence(UUIDModel):
     artifact = models.ForeignKey(Artifact, on_delete=models.PROTECT, null=True, blank=True, related_name="evidence")
     source = models.CharField(max_length=16, choices=Source.choices)
     source_version = models.CharField(max_length=100, blank=True)
+    rule_id = models.CharField(max_length=100, blank=True)
+    source_field = models.CharField(max_length=200, blank=True)
+    source_span = models.JSONField(default=dict, blank=True)
+    provenance = models.JSONField(default=dict, blank=True)
+    limitations = models.JSONField(default=list, blank=True)
     state = models.CharField(max_length=16, choices=State.choices, default=State.OBSERVED)
     trust = models.CharField(max_length=16, choices=Trust.choices, default=Trust.UNTRUSTED)
     label = models.CharField(max_length=200)
@@ -317,6 +335,48 @@ class Evidence(UUIDModel):
             models.CheckConstraint(condition=Q(trust__in=["internal", "external", "untrusted"]), name="evidence_trust_valid"),
         ]
         indexes = [models.Index(fields=["organization", "case", "-observed_at"], name="evidence_case_observed_idx")]
+
+
+class IndicatorSnapshot(UUIDModel):
+    """An immutable, timestamped local cache import; never a live lookup."""
+
+    class Kind(models.TextChoices):
+        OPERATIONAL = "operational", "Operational feed"
+        SYNTHETIC = "synthetic", "Synthetic test feed"
+
+    source_name = models.SlugField(max_length=100)
+    kind = models.CharField(max_length=16, choices=Kind.choices)
+    fetched_at = models.DateTimeField()
+    expires_at = models.DateTimeField()
+    sha256 = models.CharField(max_length=64, validators=[SHA256_VALIDATOR])
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=["source_name", "kind", "fetched_at"], name="indicator_snapshot_unique"),
+            models.CheckConstraint(condition=Q(kind__in=["operational", "synthetic"]), name="indicator_snapshot_kind_valid"),
+            models.CheckConstraint(condition=Q(expires_at__gt=models.F("fetched_at")), name="indicator_snapshot_window_valid"),
+        ]
+        indexes = [models.Index(fields=["kind", "is_active", "expires_at"], name="indicator_snapshot_due_idx")]
+
+
+class Indicator(UUIDModel):
+    class Type(models.TextChoices):
+        DOMAIN = "domain", "Exact domain"
+        URL = "url", "Exact URL"
+        EMAIL = "email", "Exact email address"
+        SHA256 = "sha256", "Exact attachment SHA-256"
+
+    snapshot = models.ForeignKey(IndicatorSnapshot, on_delete=models.PROTECT, related_name="indicators")
+    indicator_type = models.CharField(max_length=16, choices=Type.choices)
+    value = models.CharField(max_length=2048)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=["snapshot", "indicator_type", "value"], name="indicator_snapshot_value_unique"),
+            models.CheckConstraint(condition=Q(indicator_type__in=["domain", "url", "email", "sha256"]), name="indicator_type_valid"),
+        ]
+        indexes = [models.Index(fields=["indicator_type", "value"], name="indicator_exact_lookup_idx")]
 
 
 class ActionExecution(UUIDModel):

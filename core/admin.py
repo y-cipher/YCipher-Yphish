@@ -6,14 +6,16 @@ boundaries. Staff membership is required in addition to Django staff access.
 """
 
 from django.contrib import admin
+from django import forms
 from django.contrib.auth import get_user_model
 from django.contrib.auth.admin import GroupAdmin, UserAdmin
 from django.contrib.auth.models import Group
-from django.utils import timezone
+
+from .gmail_credentials import ADMIN_RESPONSE_SCOPE
 
 from .models import (
     ActionExecution, AnalysisRun, Artifact, AuditEvent, EmailCase, Evidence,
-    Feedback, Mailbox, Membership, Organization,
+    Feedback, Indicator, IndicatorSnapshot, Mailbox, Membership, Organization,
 )
 
 
@@ -50,6 +52,17 @@ class RestrictedUserAdmin(SuperuserOnlyAuthAdmin, UserAdmin):
 
 class RestrictedGroupAdmin(SuperuserOnlyAuthAdmin, GroupAdmin):
     pass
+
+
+class ReadOnlySuperuserAdmin(SuperuserOnlyAuthAdmin, admin.ModelAdmin):
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
 
 
 admin.site.unregister(get_user_model())
@@ -114,6 +127,24 @@ class TenantScopedAdmin(admin.ModelAdmin):
 
 @admin.register(Organization)
 class OrganizationAdmin(TenantScopedAdmin):
+    class OrganizationForm(forms.ModelForm):
+        class Meta:
+            model = Organization
+            fields = "__all__"
+
+        def clean(self):
+            values = super().clean()
+            client_id = values.get("gmail_response_service_account_client_id", "")
+            scope = values.get("gmail_response_scope", "")
+            if bool(client_id) != bool(scope):
+                raise forms.ValidationError("Response client ID and scope must be configured together.")
+            if scope and scope != ADMIN_RESPONSE_SCOPE:
+                raise forms.ValidationError("Administrator-delegated response requires gmail.modify.restricted.")
+            if client_id and client_id == self.instance.gmail_service_account_client_id:
+                raise forms.ValidationError("Response and ingestion must use separate service-account identities.")
+            return values
+
+    form = OrganizationForm
     visible_roles = MANAGER_ROLES
     organization_lookup = "pk"
     list_display = ("slug", "name", "is_active", "retention_days")
@@ -128,22 +159,10 @@ class OrganizationAdmin(TenantScopedAdmin):
     def get_fields(self, request, obj=None):
         if obj is None:
             return ("name", "slug", "is_active", "retention_days")
-        return ("id", "slug", "name", "is_active", "retention_days", "gmail_service_account_client_id", "gmail_access_verified_at", "gmail_response_enabled", "created_at", "updated_at")
+        return ("id", "slug", "name", "is_active", "retention_days", "gmail_service_account_client_id", "gmail_access_verified_at", "gmail_response_service_account_client_id", "gmail_response_scope", "created_at", "updated_at")
 
     def get_readonly_fields(self, request, obj=None):
         return ("id", "slug", "gmail_service_account_client_id", "gmail_access_verified_at", "created_at", "updated_at") if obj else ()
-
-    def save_model(self, request, obj, form, change):
-        previous = Organization.objects.get(pk=obj.pk).gmail_response_enabled if change else False
-        super().save_model(request, obj, form, change)
-        if change and previous != obj.gmail_response_enabled:
-            AuditEvent.objects.create(
-                organization=obj, actor=request.user,
-                event_type="organization.gmail_response_changed",
-                subject_type="organization", subject_id=obj.pk,
-                details={"enabled": obj.gmail_response_enabled}, occurred_at=timezone.now(),
-            )
-
 
 @admin.register(Membership)
 class MembershipAdmin(TenantScopedAdmin):
@@ -165,9 +184,14 @@ class MembershipAdmin(TenantScopedAdmin):
 
 @admin.register(Mailbox)
 class MailboxAdmin(TenantScopedAdmin):
-    list_display = ("address", "organization", "state", "display_name")
+    list_display = ("address", "organization", "state", "gmail_sync_status", "gmail_last_synced_at", "sync_lag_seconds")
     list_select_related = ("organization",)
     search_fields = ("address", "display_name")
+
+    @admin.display(description="Sync lag (seconds)")
+    def sync_lag_seconds(self, obj):
+        from django.utils import timezone
+        return int((timezone.now() - obj.gmail_last_synced_at).total_seconds()) if obj.gmail_last_synced_at else None
 
     def has_add_permission(self, request):
         return request.user.is_active and request.user.is_staff and (
@@ -182,14 +206,14 @@ class MailboxAdmin(TenantScopedAdmin):
             return ("organization", "address", "display_name")
         return (
             "organization", "address", "display_name", "state",
-            "provider", "provider_mailbox_id", "gmail_history_id", "gmail_label_id", "gmail_last_synced_at", "last_error_code", "created_at", "updated_at",
+            "provider", "provider_mailbox_id", "gmail_sync_status", "gmail_enrolled_at", "gmail_enrollment_history_id", "gmail_history_id", "gmail_initial_sync_completed_at", "gmail_last_synced_at", "gmail_last_attempt_at", "gmail_next_sync_at", "gmail_retry_count", "gmail_coverage_gap_from_history_id", "gmail_coverage_gap_detected_at", "gmail_label_id", "last_error_code", "created_at", "updated_at",
         )
 
     def get_readonly_fields(self, request, obj=None):
         if obj is None:
             return ()
         return (
-            "organization", "address", "state", "provider", "provider_mailbox_id", "gmail_history_id", "gmail_label_id", "gmail_last_synced_at",
+            "organization", "address", "state", "provider", "provider_mailbox_id", "gmail_sync_status", "gmail_enrolled_at", "gmail_enrollment_history_id", "gmail_history_id", "gmail_initial_sync_completed_at", "gmail_last_synced_at", "gmail_last_attempt_at", "gmail_next_sync_at", "gmail_retry_count", "gmail_coverage_gap_from_history_id", "gmail_coverage_gap_detected_at", "gmail_label_id",
             "last_error_code", "created_at", "updated_at",
         )
 
@@ -234,9 +258,21 @@ class ArtifactAdmin(TenantScopedAdmin):
 
 @admin.register(AnalysisRun)
 class AnalysisRunAdmin(TenantScopedAdmin):
-    list_display = ("id", "organization", "case", "attempt", "state", "created_at")
+    list_display = ("id", "organization", "case", "attempt", "state", "retry_count", "lease_expires_at", "error_code", "created_at")
     list_select_related = ("organization", "case")
     list_filter = ("state",)
+
+
+@admin.register(IndicatorSnapshot)
+class IndicatorSnapshotAdmin(ReadOnlySuperuserAdmin):
+    list_display = ("source_name", "kind", "fetched_at", "expires_at", "is_active", "sha256")
+    list_filter = ("kind", "is_active")
+
+
+@admin.register(Indicator)
+class IndicatorAdmin(ReadOnlySuperuserAdmin):
+    list_display = ("indicator_type", "value", "snapshot")
+    list_filter = ("indicator_type",)
 
 
 @admin.register(Evidence)

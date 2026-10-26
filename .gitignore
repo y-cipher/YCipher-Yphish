@@ -14,4 +14,6 @@ private_artifacts/
 /output/
 secrets/*
 !secrets/.gitkeep
+snapshots/*
+!snapshots/.gitkeep
 .env.example

@@ -50,6 +50,10 @@ def enrolled_mailbox(mailbox_id, *, allow_verification=False):
             or mailbox.gmail_sync_status not in {
                 Mailbox.GmailSyncStatus.INITIALIZING, Mailbox.GmailSyncStatus.READY,
                 Mailbox.GmailSyncStatus.COVERAGE_GAP, Mailbox.GmailSyncStatus.ERROR,
+                Mailbox.GmailSyncStatus.DISCONNECTED,
+                Mailbox.GmailSyncStatus.AUTHORIZATION_FAILED,
+                Mailbox.GmailSyncStatus.THROTTLED,
+                Mailbox.GmailSyncStatus.UNAVAILABLE,
             }):
         raise CredentialProviderError("gmail_mailbox_not_enrolled")
     return mailbox

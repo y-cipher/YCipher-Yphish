@@ -113,10 +113,30 @@ CELERY_BROKER_URL = os.environ.get("CELERY_BROKER_URL", "amqp://guest:guest@loca
 CELERY_TASK_SERIALIZER = "json"
 CELERY_ACCEPT_CONTENT = ["json"]
 CELERY_TIMEZONE = "UTC"
+CELERY_TASK_ACKS_LATE = True
+CELERY_WORKER_PREFETCH_MULTIPLIER = 1
+CELERY_BROKER_CONNECTION_RETRY_ON_STARTUP = True
+GMAIL_POLL_INTERVAL_SECONDS = max(10, int(os.environ.get("GMAIL_POLL_INTERVAL_SECONDS", "60")))
+GMAIL_ANALYSIS_SWEEP_INTERVAL_SECONDS = max(10, int(os.environ.get("GMAIL_ANALYSIS_SWEEP_INTERVAL_SECONDS", "30")))
+GMAIL_ANALYSIS_DISPATCH_BATCH_SIZE = max(1, int(os.environ.get("GMAIL_ANALYSIS_DISPATCH_BATCH_SIZE", "100")))
+GMAIL_ANALYSIS_REDISPATCH_SECONDS = max(30, int(os.environ.get("GMAIL_ANALYSIS_REDISPATCH_SECONDS", "120")))
+GMAIL_ANALYSIS_LEASE_SECONDS = max(30, int(os.environ.get("GMAIL_ANALYSIS_LEASE_SECONDS", "300")))
+GMAIL_RETRY_BASE_SECONDS = max(1, int(os.environ.get("GMAIL_RETRY_BASE_SECONDS", "5")))
+GMAIL_RETRY_MAX_SECONDS = max(GMAIL_RETRY_BASE_SECONDS, int(os.environ.get("GMAIL_RETRY_MAX_SECONDS", "3600")))
+DETECTION_INDICATOR_MODE = os.environ.get("DETECTION_INDICATOR_MODE", "operational")
+if DETECTION_INDICATOR_MODE not in {"operational", "synthetic"} or (DETECTION_INDICATOR_MODE == "synthetic" and not DEBUG):
+    raise ImproperlyConfigured("DETECTION_INDICATOR_MODE must be operational, or synthetic with DJANGO_DEBUG=1")
+DETECTION_AUTH_RESULTS_MODE = os.environ.get("DETECTION_AUTH_RESULTS_MODE", "untrusted_context")
+if DETECTION_AUTH_RESULTS_MODE not in {"untrusted_context", "ignore"}:
+    raise ImproperlyConfigured("DETECTION_AUTH_RESULTS_MODE must be untrusted_context or ignore")
 CELERY_BEAT_SCHEDULE = {
     "gmail-incremental-poll": {
         "task": "core.tasks.poll_gmail",
-        "schedule": 60.0,
+        "schedule": float(GMAIL_POLL_INTERVAL_SECONDS),
+    },
+    "gmail-analysis-reconciliation": {
+        "task": "core.tasks.dispatch_pending_analysis",
+        "schedule": float(GMAIL_ANALYSIS_SWEEP_INTERVAL_SECONDS),
     },
 }
 STORAGES = {

@@ -1,6 +1,6 @@
 # Yphish — Django foundation and Gmail integration
 
-This repository contains the Django/PostgreSQL data foundation and a Google Workspace Gmail integration. See [Gmail setup, runtime, and test instructions](docs/gmail.md). The Module 1 notes below describe the original foundation; the Gmail guide documents the current provider behavior.
+This repository contains the Django/PostgreSQL foundation, direct Google Workspace Gmail ingestion, Module 5 Celery/RabbitMQ synchronization, and Module 6 deterministic detection evidence. See [Gmail setup](docs/gmail.md), [Module 5 operations](docs/module5-operations.md), and [Module 6 detection](docs/module6-detection.md). Mailbox response actions are not implemented.
 
 ## Module 1: run and test
 
@@ -88,7 +88,13 @@ For a POSIX shell, `set -a; . ./.env; set +a` exports a trusted `.env` file into
 | `POSTGRES_HOST_PORT` | Optional host port for the Compose database; defaults to `5433`. |
 | `PRIVATE_ARTIFACT_ROOT` | Private filesystem directory. Compose mounts a named volume at `/app/private_artifacts`. |
 | `RABBITMQ_PASSWORD` | Required Compose broker password, distinct from the database password. |
-| `GOOGLE_SERVICE_ACCOUNT_FILE` | Service-account JSON path for host execution; Compose mounts `secrets/google-service-account.json`. |
+| `GOOGLE_INGESTION_SERVICE_ACCOUNT_FILE` | Read-only ingestion service-account JSON path for host execution; Compose mounts `secrets/google-service-account.json`. |
+| `GOOGLE_RESPONSE_SERVICE_ACCOUNT_FILE` | Separate reserved response identity path; Module 4 makes no response calls. |
+| `GMAIL_POLL_INTERVAL_SECONDS`, `GMAIL_ANALYSIS_SWEEP_INTERVAL_SECONDS` | Celery Beat polling and pending-analysis reconciliation intervals. |
+| `GMAIL_ANALYSIS_DISPATCH_BATCH_SIZE`, `GMAIL_ANALYSIS_REDISPATCH_SECONDS`, `GMAIL_ANALYSIS_LEASE_SECONDS` | Analysis outbox dispatch and crash recovery controls. |
+| `GMAIL_RETRY_BASE_SECONDS`, `GMAIL_RETRY_MAX_SECONDS` | Gmail retry backoff with jitter; provider `Retry-After` can be longer. |
+| `DETECTION_INDICATOR_MODE` | `operational` by default; `synthetic` is available only in debug mode. |
+| `DETECTION_AUTH_RESULTS_MODE` | `untrusted_context` or `ignore`; retrieved MIME headers are never trusted automatically. |
 
 `DJANGO_DEBUG=0` enables secure session and CSRF cookies. For a real deployment, put a production WSGI/ASGI server behind HTTPS, configure proxy and TLS settings, restrict database connectivity, and back up **both** the database and artifact store. Compose's `runserver` is for development only.
 
@@ -102,9 +108,9 @@ See [the complete model and constraint reference](docs/data-model.md) for every 
 - `Artifact` holds a private file, its SHA-256 digest, size, kind, and storage state (`pending`, `stored`, `failed`, `deleted`). `AnalysisRun` tracks attempts; `Evidence` records sourced observations and unavailable/error outcomes.
 - `ActionExecution` records an intended or executed response and its idempotency key. `Feedback` records proposed corrections. `AuditEvent` records history and is append-only at the database level.
 
-The initial migration creates PostgreSQL unique/check constraints and query indexes. The second migration adds triggers that reject cross-organization or cross-case references and prevent changing an existing record's organization. Artifact and analysis-run case links cannot be reassigned. The third migration adds service idempotency keys and failure-state constraints. The fourth adds Gmail identity, history cursor, label, and delegation fields while preserving legacy rows. Mailbox addresses are case-insensitively unique per organization. Gmail message IDs are unique within each organization and mailbox; action idempotency keys are unique within an organization.
+The initial migration creates PostgreSQL unique/check constraints and query indexes. The second migration adds tenant relationship triggers. The third adds idempotency keys and failure-state constraints. The fourth adds Gmail identity fields; the fifth adds enrollment boundaries, sync status, gap visibility, label IDs, and internalDate while preserving legacy rows. The sixth adds queue leases, retry timing, deletion tombstones, and explicit integration states. The seventh adds structured rule evidence fields and timestamped indicator snapshots. Mailbox addresses are case-insensitively unique per organization. Gmail message IDs are unique within each organization and mailbox.
 
-The models establish persistence and legal states, and the service guards the failure and skipped transitions described below. Gmail polling and message-level action execution are documented in the [Gmail guide](docs/gmail.md). Artifact retention jobs, encryption at rest, and a phishing classifier are still outstanding.
+The models establish persistence and legal states, and the service guards the failure and skipped transitions described below. Read-only Gmail polling is documented in the [Gmail guide](docs/gmail.md). Mailbox response execution is outside Module 4.
 
 ### Transactional write services
 

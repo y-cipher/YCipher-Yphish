@@ -97,6 +97,7 @@ def record_evidence(
     *, organization, case, idempotency_key, source, label, observed_at,
     state=Evidence.State.OBSERVED, trust=Evidence.Trust.UNTRUSTED,
     source_version="", details=None, analysis_run=None, artifact=None,
+    rule_id="", source_field="", source_span=None, provenance=None, limitations=None,
 ):
     """Return ``(evidence, created)``; reject conflicting reuse of its case key."""
     key = _require_key(idempotency_key, max_length=200)
@@ -110,6 +111,16 @@ def record_evidence(
     if not label:
         raise ValueError("Evidence label is required")
     details = {} if details is None else details
+    source_span = {} if source_span is None else source_span
+    provenance = {} if provenance is None else provenance
+    limitations = [] if limitations is None else limitations
+    if source == Evidence.Source.RULE and (
+        analysis_run is None or not rule_id or not source_version or not source_field
+        or not isinstance(source_span, dict) or not isinstance(provenance, dict)
+        or not provenance or not isinstance(limitations, list)
+        or any(not isinstance(item, str) for item in limitations)
+    ):
+        raise ValueError("Rule evidence requires run, ID/version, source, provenance, and limitations")
     values = {
         "source": source,
         "label": label,
@@ -120,6 +131,11 @@ def record_evidence(
         "details": details,
         "analysis_run_id": analysis_run.pk if analysis_run else None,
         "artifact_id": artifact.pk if artifact else None,
+        "rule_id": rule_id,
+        "source_field": source_field,
+        "source_span": source_span,
+        "provenance": provenance,
+        "limitations": limitations,
     }
     evidence, created = Evidence.objects.get_or_create(
         organization=organization, case=case, idempotency_key=key, defaults=values
