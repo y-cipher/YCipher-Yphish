@@ -1,4 +1,4 @@
-# 🛡️ Yphish
+# YCipher-Yphish
 
 **Evidence-driven phishing investigation and automatic Gmail response for Google Workspace teams.**
 
@@ -10,7 +10,7 @@ Connect enrolled mailboxes, inspect message evidence, and apply controlled respo
 
 <a id="features"></a>
 
-## ✨ Key Features
+##  Key Features
 
 - **Direct Gmail integration:** incremental polling, durable history cursors, and explicit mailbox enrollment.
 - **Evidence-backed analysis:** versioned rule observations, provenance, errors, and visible coverage gaps.
@@ -25,7 +25,7 @@ Connect enrolled mailboxes, inspect message evidence, and apply controlled respo
 
 <a id="tech-stack"></a>
 
-## 🧰 Tech Stack
+##  Tech Stack
 
 | Layer | Technologies |
 | --- | --- |
@@ -43,7 +43,7 @@ Dependency ranges are defined in [requirements.txt](requirements.txt); service i
 
 <a id="getting-started"></a>
 
-## 🚀 Getting Started
+##  Getting Started
 
 <a id="prerequisites"></a>
 
@@ -154,7 +154,7 @@ Django should report no system-check issues. The health endpoint should return `
 
 <a id="usage"></a>
 
-## ▶️ Usage / Quick Start
+##  Usage / Quick Start
 
 After installation, use the local walkthrough to explore cases, then connect real mailboxes when you are ready.
 
@@ -325,7 +325,7 @@ In-flight tasks may finish while stopping. Inspect the action ledger and Gmail s
 
 <a id="configuration"></a>
 
-## ⚙️ Configuration / Environment Variables
+##  Configuration / Environment Variables
 
 Use [.env.example](.env.example) for local development and [.env.trial.example](.env.trial.example) when following the HTTPS trial guide. Keep your actual `.env` private.
 
@@ -378,7 +378,7 @@ An empty cache or absent model is an explicit coverage limitation. Gmail `SPAM` 
 
 <a id="developer-reference"></a>
 
-## 🧭 Developer Reference
+##  Developer Reference
 
 <a id="project-structure-and-data-boundaries"></a>
 
@@ -454,7 +454,7 @@ Run `python manage.py test core --noinput` in another terminal with the same env
 
 <a id="troubleshooting"></a>
 
-## 🛠️ Troubleshooting
+##  Troubleshooting
 
 | Symptom | What to check |
 | --- | --- |
@@ -477,7 +477,7 @@ For cursor gaps, response conflicts, suspension, and recovery procedures, use th
 
 <a id="https-trial-deployment"></a>
 
-## 🌐 HTTPS Trial Deployment
+##  HTTPS Trial Deployment
 
 The base Compose file runs a local development server. The separate trial overlay uses Gunicorn, WhiteNoise, and Caddy for HTTPS.
 
@@ -495,7 +495,7 @@ The trial example disables automatic response initially. Readiness can fail unti
 
 <a id="documentation"></a>
 
-## 📚 Documentation
+##  Documentation
 
 | Guide | Purpose |
 | --- | --- |
