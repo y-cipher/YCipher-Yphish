@@ -104,6 +104,7 @@ USE_TZ = True
 
 STATIC_URL = "static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
+TEST_RUNNER = "config.test_runner.StaticFilesTestRunner"
 LOGIN_URL = "/dashboard/login/"
 LOGIN_REDIRECT_URL = "/dashboard/"
 PRIVATE_ARTIFACT_ROOT = Path(env("PRIVATE_ARTIFACT_ROOT", str(BASE_DIR / "private_artifacts"))).resolve()
