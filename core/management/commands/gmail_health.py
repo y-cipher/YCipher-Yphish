@@ -8,7 +8,7 @@ from django.db.models import Count
 from django.utils import timezone
 from kombu import Connection
 
-from core.models import AnalysisRun, Mailbox
+from core.models import AnalysisRun, Mailbox, ServiceHeartbeat
 from core.analysis_runtime import RUN_KEYS
 
 
@@ -55,8 +55,13 @@ class Command(BaseCommand):
             idempotency_key__in=RUN_KEYS, state=AnalysisRun.State.RUNNING,
             lease_expires_at__lt=now,
         ).count()
+        beat_seen = ServiceHeartbeat.objects.filter(name="beat").values_list("last_seen_at", flat=True).first()
+        beat_lag = int((now - beat_seen).total_seconds()) if beat_seen else None
         report = {"broker": broker, "workers_responding": workers,
                   "queue_health": "ready" if broker == "connected" and workers else "degraded",
+                  "scheduler_health": "ready" if beat_lag is not None and beat_lag <= 180 else "degraded",
+                  "scheduler_last_heartbeat": beat_seen.isoformat() if beat_seen else None,
+                  "scheduler_lag_seconds": beat_lag,
                   "analysis_runs": counts, "oldest_pending_seconds":
                   int((now - oldest.created_at).total_seconds()) if oldest else None,
                   "stale_analysis_leases": stale_leases, "mailboxes": mailboxes}
@@ -64,6 +69,7 @@ class Command(BaseCommand):
             self.stdout.write(json.dumps(report, sort_keys=True))
         else:
             self.stdout.write(f"Queue: {report['queue_health']} (broker={broker}, workers={workers})")
+            self.stdout.write(f"Scheduler: {report['scheduler_health']} (lag={beat_lag}s)")
             self.stdout.write(f"Analysis runs: {counts}")
             self.stdout.write(f"Oldest pending: {report['oldest_pending_seconds']}s; stale leases: {stale_leases}")
             for item in mailboxes:

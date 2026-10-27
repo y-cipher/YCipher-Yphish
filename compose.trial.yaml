@@ -1,0 +1,31 @@
+# Use with compose.yaml and a trial-specific .env. The base file remains for local development.
+services:
+  web:
+    command: sh -c "python manage.py migrate --noinput && python manage.py collectstatic --noinput && gunicorn config.wsgi:application --bind 0.0.0.0:8000 --workers 2 --timeout 60 --access-logfile - --error-logfile -"
+  db:
+    volumes:
+      - ./trial_backups:/backups
+  backup:
+    image: alpine:3.21
+    profiles: [backup]
+    volumes:
+      - private_artifacts:/source:ro
+      - ./trial_backups:/backups
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    environment:
+      TRIAL_DOMAIN: ${TRIAL_DOMAIN:?Set TRIAL_DOMAIN in .env}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      web:
+        condition: service_healthy
+volumes:
+  caddy_data:
+  caddy_config:

@@ -1,6 +1,6 @@
 # Yphish — Django foundation and Gmail integration
 
-This repository contains the Django/PostgreSQL foundation, direct Google Workspace Gmail ingestion, background synchronization, deterministic evidence, the TF-IDF classifier, bounded investigation, automatic message-level response, and an operator dashboard. See [Gmail setup](docs/gmail.md), [Module 5 operations](docs/module5-operations.md), [Module 6 detection](docs/module6-detection.md), [Module 7 classifier](docs/module7-classifier.md), [Module 8 investigation](docs/module8-investigation.md), [Module 9 response](docs/module9-response.md), and [Module 10 dashboard](docs/module10-dashboard.md).
+This repository contains the Django/PostgreSQL foundation, direct Google Workspace Gmail ingestion, background synchronization, deterministic evidence, the TF-IDF classifier, bounded investigation, automatic message-level response, and an operator dashboard. See [Gmail setup](docs/gmail.md), [Module 5 operations](docs/module5-operations.md), [Module 6 detection](docs/module6-detection.md), [Module 7 classifier](docs/module7-classifier.md), [Module 8 investigation](docs/module8-investigation.md), [Module 9 response](docs/module9-response.md), [Module 10 dashboard](docs/module10-dashboard.md), and [Module 11 trial operations](docs/module11-trial-operations.md).
 
 ## Module 1: run and test
 
@@ -101,7 +101,7 @@ For a POSIX shell, `set -a; . ./.env; set +a` exports a trusted `.env` file into
 | `INVESTIGATION_*` | Read-only investigation budgets and optional DNS/context settings. See the Module 8 guide. |
 | `GMAIL_RESPONSE_*` | Global response switch, sweep interval, rate limits, circuit breaker, lease, and maximum case age. See the Module 9 guide. |
 
-`DJANGO_DEBUG=0` enables secure session and CSRF cookies. For a real deployment, put a production WSGI/ASGI server behind HTTPS, configure proxy and TLS settings, restrict database connectivity, and back up **both** the database and artifact store. Compose's `runserver` is for development only.
+`DJANGO_DEBUG=0` enables secure session and CSRF cookies. The [limited-trial profile](docs/module11-trial-operations.md) adds Gunicorn, HTTPS termination, static collection, deployment checks, backup instructions, and private-artifact retention. Base Compose's `runserver` remains for development only.
 
 ## Data model and integrity
 

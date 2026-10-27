@@ -10,7 +10,8 @@ COPY . .
 RUN useradd --create-home --uid 10001 app \
     && mkdir -p /app/private_artifacts \
     && mkdir -p /app/model_artifacts \
-    && chown app:app /app/private_artifacts /app/model_artifacts \
+    && mkdir -p /app/staticfiles \
+    && chown app:app /app/private_artifacts /app/model_artifacts /app/staticfiles \
     && chmod 700 /app/private_artifacts /app/model_artifacts
 
 EXPOSE 8000

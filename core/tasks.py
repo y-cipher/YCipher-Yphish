@@ -15,13 +15,14 @@ from .gmail_runtime import sync_mailbox
 from .investigation import (
     execute_investigation, pending_investigation_ids, reconcile_investigations,
 )
-from .models import AnalysisRun, InvestigationRun, Mailbox
+from .models import AnalysisRun, InvestigationRun, Mailbox, ServiceHeartbeat
 from .models import ActionExecution
 from .response_runtime import (
     execute_response, pending_response_action_ids, pending_response_case_ids,
     pending_restoration_case_ids, prepare_response, prepare_restoration,
     reconcile_response_work,
 )
+from .retention import prune_private_artifacts as prune_artifacts
 
 
 POLLABLE = [
@@ -177,3 +178,17 @@ def prepare_gmail_restoration(case_id):
 @shared_task
 def execute_gmail_response(action_id):
     return execute_response(action_id)
+
+
+@shared_task
+def prune_private_artifacts():
+    if not settings.ARTIFACT_RETENTION_ENABLED:
+        return {"eligible": 0, "deleted": 0, "file_errors": 0}
+    return prune_artifacts()
+
+
+@shared_task
+def scheduler_heartbeat():
+    ServiceHeartbeat.objects.update_or_create(
+        name="beat", defaults={"last_seen_at": timezone.now()},
+    )

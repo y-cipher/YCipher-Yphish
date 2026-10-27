@@ -50,6 +50,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
@@ -156,7 +157,13 @@ GMAIL_RESPONSE_FAILURE_THRESHOLD = max(1, int(os.environ.get("GMAIL_RESPONSE_FAI
 GMAIL_RESPONSE_CIRCUIT_SECONDS = max(60, int(os.environ.get("GMAIL_RESPONSE_CIRCUIT_SECONDS", "1800")))
 GMAIL_RESPONSE_LEASE_SECONDS = max(30, int(os.environ.get("GMAIL_RESPONSE_LEASE_SECONDS", "180")))
 GMAIL_RESPONSE_MAX_CASE_AGE_HOURS = max(1, int(os.environ.get("GMAIL_RESPONSE_MAX_CASE_AGE_HOURS", "24")))
+ARTIFACT_RETENTION_ENABLED = env_bool("ARTIFACT_RETENTION_ENABLED", False)
+ARTIFACT_RETENTION_BATCH_SIZE = max(1, min(1000, int(os.environ.get("ARTIFACT_RETENTION_BATCH_SIZE", "100"))))
 CELERY_BEAT_SCHEDULE = {
+    "scheduler-heartbeat": {
+        "task": "core.tasks.scheduler_heartbeat",
+        "schedule": 60.0,
+    },
     "gmail-incremental-poll": {
         "task": "core.tasks.poll_gmail",
         "schedule": float(GMAIL_POLL_INTERVAL_SECONDS),
@@ -173,18 +180,27 @@ CELERY_BEAT_SCHEDULE = {
         "task": "core.tasks.dispatch_pending_response",
         "schedule": float(GMAIL_RESPONSE_SWEEP_INTERVAL_SECONDS),
     },
+    "private-artifact-retention": {
+        "task": "core.tasks.prune_private_artifacts",
+        "schedule": 86400.0,
+    },
 }
 STORAGES = {
     "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
     "private_artifacts": {
         "BACKEND": "core.storage.PrivateArtifactStorage",
     },
-    "staticfiles": {"BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage"},
+    "staticfiles": {"BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage"},
 }
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 SESSION_COOKIE_SECURE = not DEBUG
 CSRF_COOKIE_SECURE = not DEBUG
+SECURE_SSL_REDIRECT = env_bool("DJANGO_SECURE_SSL_REDIRECT", False)
+SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https") if env_bool("DJANGO_TRUST_PROXY_HEADERS", False) else None
+SECURE_HSTS_SECONDS = max(0, int(os.environ.get("DJANGO_HSTS_SECONDS", "0")))
+SECURE_HSTS_INCLUDE_SUBDOMAINS = False
+SECURE_HSTS_PRELOAD = False
 SECURE_CONTENT_TYPE_NOSNIFF = True
 SECURE_REFERRER_POLICY = "same-origin"
 X_FRAME_OPTIONS = "DENY"

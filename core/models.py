@@ -557,3 +557,13 @@ class AuditEvent(UUIDModel):
             models.Index(fields=["organization", "case", "-occurred_at"], name="audit_case_occurred_idx"),
             models.Index(fields=["correlation_id"], name="audit_correlation_idx"),
         ]
+
+
+class ServiceHeartbeat(UUIDModel):
+    """A worker-executed beat heartbeat; absence indicates scheduler or queue trouble."""
+
+    name = models.CharField(max_length=40, unique=True)
+    last_seen_at = models.DateTimeField()
+
+    def __str__(self):
+        return self.name

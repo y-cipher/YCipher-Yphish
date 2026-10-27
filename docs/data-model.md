@@ -1,6 +1,6 @@
 # Module 1 data model and database rules
 
-All domain tables use UUID primary keys and `created_at`. Tenant-owned rows carry an `organization` foreign key; indicator snapshots are global local-cache records. Foreign keys use `PROTECT` for investigation history unless noted; user references in `Feedback` use `SET_NULL`. PostgreSQL constraints are defined in `core.models`, with tenant and audit triggers in migrations `0002`, `0003`, and `0004`.
+All domain tables use UUID primary keys and `created_at`. Tenant-owned rows carry an `organization` foreign key; indicator snapshots and the operational heartbeat are global records. Foreign keys use `PROTECT` for investigation history unless noted; user references in `Feedback` use `SET_NULL`. PostgreSQL constraints are defined in `core.models`, with tenant and audit triggers in migrations `0002`, `0003`, and `0004`.
 
 | Model | Purpose | Unique and check constraints | Query indexes |
 | --- | --- | --- | --- |
@@ -17,6 +17,7 @@ All domain tables use UUID primary keys and `created_at`. Tenant-owned rows carr
 | `ResponseControl` | Per-organization or per-mailbox hourly response reservations, failure count, and circuit-open time. | Conditional `response_org_control_unique` and `response_mailbox_control_unique`; migration `0011` rejects cross-organization mailbox links and immutable link changes. | Partial unique indexes and foreign-key indexes. |
 | `Feedback` | Proposed verdict correction and review state. | `feedback_verdict_valid`, `feedback_state_valid`, and `feedback_review_state_valid`. | `feedback_case_created_idx`; foreign-key indexes. |
 | `AuditEvent` | Append-only event history with optional actor, case, and correlation ID. | `audit_event_type_required`; migration `0002` rejects updates and deletes. | `audit_org_occurred_idx`, `audit_case_occurred_idx`, `audit_correlation_idx`; foreign-key indexes. |
+| `ServiceHeartbeat` | Last worker-executed beat heartbeat for scheduler/queue monitoring; no mailbox data. | Unique `name`. | Primary key and unique name. |
 
 ## Relationship guards
 
@@ -34,4 +35,4 @@ Migration `0008` adds opt-in sender and conversation context flags to `Mailbox`,
 
 Migration `0010` adds response flags, the separate label-management scope, action lease/retry fields, and `ResponseControl` without removing existing data. Migration `0011` adds its tenant/immutability trigger. See [Module 9 response](module9-response.md).
 
-Migration `0012` adds nullable first-ingestion Gmail label IDs for the dashboard. Existing cases remain null because their original labels cannot be reconstructed from current state. See [Module 10 dashboard](module10-dashboard.md).
+Migration `0012` adds nullable first-ingestion Gmail label IDs for the dashboard. Existing cases remain null because their original labels cannot be reconstructed from current state. See [Module 10 dashboard](module10-dashboard.md). Migration `0013` adds the independent scheduler heartbeat table for [trial monitoring](module11-trial-operations.md).
