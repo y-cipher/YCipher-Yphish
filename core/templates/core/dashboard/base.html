@@ -1,0 +1,52 @@
+{% load static %}<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <title>{% block title %}Yphish{% endblock %} · Yphish</title>
+  <link rel="stylesheet" href="{% static 'core/bootstrap.min.css' %}">
+  <link rel="stylesheet" href="{% static 'core/dashboard.css' %}">
+  <script src="{% static 'core/dashboard.js' %}" defer></script>
+</head>
+<body>
+  <a class="visually-hidden-focusable skip-link" href="#main-content">Skip to main content</a>
+  <header class="site-header border-bottom">
+    <div class="container-xl d-flex flex-wrap align-items-center justify-content-between gap-3 py-3">
+      <div class="d-flex align-items-center gap-3">
+        <a class="brand" href="{% url 'dashboard_home' %}"><span class="brand-mark" aria-hidden="true">Y</span> Yphish</a>
+        {% if organization %}<span class="organization-name">{{ organization.name }}</span>{% endif %}
+      </div>
+      <div class="d-flex flex-wrap align-items-center gap-3">
+        {% if memberships and memberships.count > 1 %}
+          <div class="small">Organization:
+            {% for item in memberships %}<a class="ms-2" href="{% url 'dashboard_overview' item.organization.slug %}">{{ item.organization.name }}</a>{% endfor %}
+          </div>
+        {% endif %}
+        {% if request.user.is_authenticated %}<span class="small text-secondary">{{ request.user.get_username }}{% if membership %} · {{ membership.get_role_display }}{% endif %}</span>
+        <form method="post" action="{% url 'dashboard_logout' %}">{% csrf_token %}<button class="btn btn-sm btn-outline-secondary" type="submit">Sign out</button></form>{% endif %}
+      </div>
+    </div>
+  </header>
+  {% if organization %}
+  <nav class="subnav" aria-label="Primary navigation">
+    <div class="container-xl d-flex flex-wrap gap-1 py-2">
+      <a class="nav-link {% if section == 'overview' %}active{% endif %}" {% if section == 'overview' %}aria-current="page"{% endif %} href="{% url 'dashboard_overview' organization.slug %}">Overview</a>
+      <a class="nav-link {% if section == 'cases' %}active{% endif %}" {% if section == 'cases' %}aria-current="page"{% endif %} href="{% url 'dashboard_case_list' organization.slug %}">Cases</a>
+      <a class="nav-link {% if section == 'settings' %}active{% endif %}" {% if section == 'settings' %}aria-current="page"{% endif %} href="{% url 'dashboard_settings' organization.slug %}">Gmail settings</a>
+    </div>
+  </nav>
+  {% endif %}
+  <main class="container-xl py-4 py-lg-5" id="main-content">
+    {% if messages %}
+    <div aria-live="polite" role="status">
+      {% for message in messages %}
+      <div class="alert {% if message.tags == 'error' %}alert-danger{% elif message.tags == 'success' %}alert-success{% else %}alert-info{% endif %}" role="alert">{{ message }}</div>
+      {% endfor %}
+    </div>
+    {% endif %}
+    {% block content %}{% endblock %}
+  </main>
+  <footer class="container-xl pb-4 text-secondary small border-top pt-3">Yphish labels Gmail messages and may remove INBOX when configured. It does not block delivery or make messages inaccessible.</footer>
+</body>
+</html>

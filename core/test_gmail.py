@@ -274,6 +274,8 @@ class GmailSyncTests(TransactionTestCase):
         self.assertEqual(Artifact.objects.filter(state=Artifact.State.STORED).count(), 2)
         self.assertEqual(Evidence.objects.count(), 2)
         self.assertEqual(EmailCase.objects.get(gmail_message_id="arrived").gmail_label_ids, ["INBOX", "Label_42"])
+        self.assertEqual(EmailCase.objects.get(gmail_message_id="arrived").gmail_initial_label_ids,
+                         ["INBOX", "Label_42"])
         self.assertEqual(EmailCase.objects.get(gmail_message_id="arrived").gmail_internal_date_ms, "1700000000123")
 
     def test_failed_history_page_keeps_completed_cursor_while_work_remains_durable(self):

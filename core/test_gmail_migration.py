@@ -6,7 +6,7 @@ from django.test import TransactionTestCase
 OLD = ("core", "0003_transactional_service_keys")
 GMAIL_BASE = ("core", "0004_emailcase_gmail_message_id_emailcase_gmail_thread_id_and_more")
 BOUNDARY = ("core", "0005_emailcase_gmail_internal_date_ms_and_more")
-NEW = ("core", "0011_response_control_tenant_guard")
+NEW = ("core", "0012_emailcase_gmail_initial_label_ids")
 
 
 class GmailUpgradeTests(TransactionTestCase):

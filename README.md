@@ -1,6 +1,6 @@
 # Yphish — Django foundation and Gmail integration
 
-This repository contains the Django/PostgreSQL foundation, direct Google Workspace Gmail ingestion, background synchronization, deterministic evidence, the TF-IDF classifier, bounded investigation, and automatic message-level response. See [Gmail setup](docs/gmail.md), [Module 5 operations](docs/module5-operations.md), [Module 6 detection](docs/module6-detection.md), [Module 7 classifier](docs/module7-classifier.md), [Module 8 investigation](docs/module8-investigation.md), and [Module 9 response](docs/module9-response.md).
+This repository contains the Django/PostgreSQL foundation, direct Google Workspace Gmail ingestion, background synchronization, deterministic evidence, the TF-IDF classifier, bounded investigation, automatic message-level response, and an operator dashboard. See [Gmail setup](docs/gmail.md), [Module 5 operations](docs/module5-operations.md), [Module 6 detection](docs/module6-detection.md), [Module 7 classifier](docs/module7-classifier.md), [Module 8 investigation](docs/module8-investigation.md), [Module 9 response](docs/module9-response.md), and [Module 10 dashboard](docs/module10-dashboard.md).
 
 ## Module 1: run and test
 

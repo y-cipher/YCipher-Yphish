@@ -1,0 +1,31 @@
+{% extends 'core/dashboard/base.html' %}
+{% block title %}Cases{% endblock %}
+{% block content %}
+<div class="page-heading mb-4"><p class="eyebrow">Gmail messages</p><h1 class="display-6 mb-1">Cases</h1><p class="text-secondary mb-0">One case represents one Gmail message. Conversation threads are context, not shared verdicts.</p></div>
+<section class="surface p-4 mb-4" aria-labelledby="filter-heading">
+  <h2 id="filter-heading" class="h5 mb-3">Find cases</h2>
+  <form method="get" class="row g-3 align-items-end" role="search">
+    <div class="col-md-6 col-xl-4"><label class="form-label" for="{{ form.q.id_for_label }}">{{ form.q.label }}</label>{{ form.q }}</div>
+    <div class="col-md-6 col-xl-4"><label class="form-label" for="{{ form.mailbox.id_for_label }}">{{ form.mailbox.label }}</label>{{ form.mailbox }}</div>
+    <div class="col-6 col-md-4 col-xl-2"><label class="form-label" for="{{ form.verdict.id_for_label }}">{{ form.verdict.label }}</label>{{ form.verdict }}</div>
+    <div class="col-6 col-md-4 col-xl-2"><label class="form-label" for="{{ form.state.id_for_label }}">{{ form.state.label }}</label>{{ form.state }}</div>
+    <div class="col-6 col-md-4 col-xl-3"><label class="form-label" for="{{ form.label.id_for_label }}">{{ form.label.label }}</label>{{ form.label }}</div>
+    <div class="col-6 col-md-4 col-xl-3"><label class="form-label" for="{{ form.response.id_for_label }}">{{ form.response.label }}</label>{{ form.response }}</div>
+    <div class="col-md-4 col-xl-3"><button class="btn btn-primary w-100" type="submit">Apply filters</button></div>
+    <div class="col-md-4 col-xl-3"><a class="btn btn-outline-secondary w-100" href="{% url 'dashboard_case_list' organization.slug %}">Clear filters</a></div>
+  </form>
+  {% if form.errors %}<div class="alert alert-danger mt-3 mb-0" role="alert">One or more filters are invalid. Choose values from the available options.</div>{% endif %}
+</section>
+<section class="surface" aria-labelledby="results-heading">
+  <div class="section-header"><div><p class="eyebrow">Results</p><h2 id="results-heading" class="h5 mb-0">{{ page.paginator.count }} message{{ page.paginator.count|pluralize }}</h2></div><span class="text-secondary small">Page {{ page.number }} of {{ page.paginator.num_pages }}</span></div>
+  {% if rows %}<div class="table-responsive"><table class="table align-middle mb-0"><caption class="visually-hidden">Organization-scoped Gmail cases; no message body is shown in this list.</caption><thead><tr><th scope="col">Message preview</th><th scope="col">Mailbox</th><th scope="col">Received</th><th scope="col">Verdict</th><th scope="col">Processing</th><th scope="col">Response</th></tr></thead><tbody>
+  {% for row in rows %}<tr><th scope="row" class="case-preview"><a href="{% url 'dashboard_case_detail' organization.slug row.case.pk %}">{{ row.subject_excerpt|default:'(No subject)' }}</a><span class="d-block text-secondary small">Sender domain: {{ row.sender_domain }}</span></th><td>{{ row.case.mailbox.address }}</td><td>{{ row.case.received_at|date:'Y-m-d H:i T'|default:'Unknown' }}</td><td>{{ row.case.get_verdict_display }}</td><td>{{ row.case.get_state_display }}</td><td><span class="status-pill status-{{ row.response_code }}">{{ row.response_label }}</span></td></tr>{% endfor %}
+  </tbody></table></div>
+  {% else %}<div class="empty-state"><strong>No matching messages.</strong><p class="mb-0">Try fewer filters, or check mailbox synchronization on the overview page.</p></div>{% endif %}
+</section>
+{% if page.has_other_pages %}<nav class="d-flex justify-content-between align-items-center mt-4" aria-label="Case results pages">
+  {% if page.has_previous %}<a class="btn btn-outline-secondary" href="?{{ pagination_query }}page={{ page.previous_page_number }}">Previous</a>{% else %}<span></span>{% endif %}
+  <span class="text-secondary small">Page {{ page.number }} of {{ page.paginator.num_pages }}</span>
+  {% if page.has_next %}<a class="btn btn-outline-secondary" href="?{{ pagination_query }}page={{ page.next_page_number }}">Next</a>{% else %}<span></span>{% endif %}
+</nav>{% endif %}
+{% endblock %}

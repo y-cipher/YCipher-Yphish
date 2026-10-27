@@ -1,0 +1,46 @@
+:root { --ink: #152233; --muted: #637286; --line: #dfe6eb; --surface: #fff; --canvas: #f5f8fa; --brand: #176b68; }
+body { background: var(--canvas); color: var(--ink); min-height: 100vh; }
+a { color: #075c62; }
+a:hover { color: #084347; }
+.site-header { background: #fff; }
+.brand { color: var(--ink); font-size: 1.25rem; font-weight: 750; letter-spacing: -.03em; text-decoration: none; }
+.brand:hover { color: var(--ink); }
+.brand-mark { align-items: center; background: var(--brand); border-radius: .6rem; color: #fff; display: inline-flex; font-size: 1rem; height: 2rem; justify-content: center; margin-right: .4rem; width: 2rem; }
+.organization-name { border-left: 1px solid var(--line); color: var(--muted); font-size: .9rem; padding-left: 1rem; }
+.subnav { background: #fff; box-shadow: 0 1px 0 var(--line); }
+.subnav .nav-link { border-radius: .45rem; color: #516173; font-size: .93rem; font-weight: 600; padding: .55rem .9rem; text-decoration: none; }
+.subnav .nav-link:hover, .subnav .nav-link.active { background: #e9f4f2; color: #075c62; }
+.skip-link { left: 1rem; position: absolute; top: 1rem; z-index: 1000; }
+.eyebrow { color: #317b78; font-size: .72rem; font-weight: 750; letter-spacing: .11em; margin: 0 0 .4rem; text-transform: uppercase; }
+.page-heading h1 { letter-spacing: -.035em; }
+.surface, .metric-card { background: var(--surface); border: 1px solid var(--line); border-radius: .85rem; box-shadow: 0 2px 8px rgb(25 44 57 / 3%); }
+.metric-card { display: flex; flex-direction: column; min-height: 8.1rem; padding: 1.15rem 1.3rem; }
+.metric-card span { color: var(--muted); font-size: .83rem; font-weight: 600; }
+.metric-card strong { font-size: 2rem; letter-spacing: -.05em; line-height: 1.25; margin-top: .25rem; }
+.metric-card small { color: var(--muted); margin-top: auto; }
+.section-header { align-items: center; border-bottom: 1px solid var(--line); display: flex; flex-wrap: wrap; gap: 1rem; justify-content: space-between; padding: 1.2rem 1.5rem; }
+.empty-state { color: var(--muted); padding: 2.3rem 1.5rem; text-align: center; }
+.table { --bs-table-bg: transparent; }
+.table th, .table td { padding: .85rem 1rem; vertical-align: top; }
+.table thead th { color: #627187; font-size: .73rem; letter-spacing: .05em; text-transform: uppercase; }
+.case-preview { min-width: 13rem; max-width: 19rem; }
+.case-preview a { display: block; overflow-wrap: anywhere; }
+.status-pill { background: #eaf0f3; border-radius: 999px; color: #2c5365; display: inline-block; font-size: .75rem; font-weight: 700; line-height: 1.4; padding: .3rem .7rem; white-space: normal; }
+.status-labeled, .status-inbox_removed { background: #e4f2ed; color: #1b614c; }
+.status-restored { background: #e5edfb; color: #2b5599; }
+.status-failed, .status-unavailable { background: #f9e6e4; color: #a43b37; }
+.status-pending { background: #fff1d2; color: #805900; }
+.status-line { align-items: center; display: flex; gap: .55rem; font-weight: 650; }
+.status-dot { background: #c78d34; border-radius: 50%; height: .55rem; width: .55rem; }
+.status-dot.good { background: #2a9170; }
+.record + .record { border-top: 1px solid var(--line); }
+.detail-list dt { color: var(--muted); font-weight: 500; }
+.detail-list dd { font-weight: 550; overflow-wrap: anywhere; }
+.label-chip { background: #edf2f5; border-radius: .35rem; color: #365163; display: inline-block; font-family: ui-monospace, monospace; font-size: .75rem; margin: .15rem .25rem .15rem 0; max-width: 100%; overflow-wrap: anywhere; padding: .3rem .5rem; }
+.message-preview, .json-view, .command-view { background: #f4f7f8; border: 1px solid var(--line); border-radius: .5rem; color: #263e4a; font-size: .78rem; max-height: 21rem; overflow: auto; overflow-wrap: anywhere; padding: .8rem 1rem; white-space: pre-wrap; word-break: break-word; }
+.command-view { max-height: none; }
+details summary { color: #075c62; cursor: pointer; font-size: .83rem; font-weight: 600; }
+details[open] summary { margin-bottom: .6rem; }
+.btn-primary { --bs-btn-bg: #176b68; --bs-btn-border-color: #176b68; --bs-btn-hover-bg: #115654; --bs-btn-hover-border-color: #115654; --bs-btn-active-bg: #104c4a; }
+.btn-outline-primary { --bs-btn-color: #176b68; --bs-btn-border-color: #176b68; --bs-btn-hover-bg: #176b68; --bs-btn-hover-border-color: #176b68; }
+@media (max-width: 575.98px) { .organization-name { display: none; } .metric-card { min-height: 7.4rem; } .section-header { padding: 1rem; } .table th, .table td { padding: .7rem; } }

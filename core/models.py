@@ -164,6 +164,7 @@ class EmailCase(UUIDModel):
     gmail_message_id = models.CharField(max_length=512, blank=True)
     gmail_thread_id = models.CharField(max_length=512, blank=True)
     gmail_label_ids = models.JSONField(default=list, blank=True)
+    gmail_initial_label_ids = models.JSONField(null=True, blank=True)
     gmail_internal_date_ms = models.CharField(max_length=32, blank=True)
     gmail_is_historical = models.BooleanField(default=False)
     gmail_deleted_at = models.DateTimeField(null=True, blank=True)

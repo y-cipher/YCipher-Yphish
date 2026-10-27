@@ -1,0 +1,18 @@
+{% extends 'core/dashboard/base.html' %}
+{% block title %}Sign in{% endblock %}
+{% block content %}
+<div class="row justify-content-center mt-lg-5"><div class="col-md-7 col-lg-5">
+  <div class="surface p-4 p-lg-5">
+    <p class="eyebrow mb-2">Operator dashboard</p>
+    <h1 class="h3 mb-2">Sign in to Yphish</h1>
+    <p class="text-secondary mb-4">Dashboard sign-in is separate from Gmail authorization.</p>
+    {% if form.errors %}<div class="alert alert-danger" role="alert">Sign-in failed. Check your username and password.</div>{% endif %}
+    <form method="post" action="{% url 'dashboard_login' %}" data-loading-form>{% csrf_token %}
+      <input type="hidden" name="next" value="{{ next }}">
+      <div class="mb-3"><label for="id_username" class="form-label">Username</label><input type="text" name="username" id="id_username" class="form-control" autocomplete="username" required autofocus></div>
+      <div class="mb-4"><label for="id_password" class="form-label">Password</label><input type="password" name="password" id="id_password" class="form-control" autocomplete="current-password" required></div>
+      <button type="submit" class="btn btn-primary w-100">Sign in</button><span class="visually-hidden submit-loading" role="status">Signing in…</span>
+    </form>
+  </div>
+</div></div>
+{% endblock %}

@@ -103,6 +103,8 @@ USE_TZ = True
 
 STATIC_URL = "static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
+LOGIN_URL = "/dashboard/login/"
+LOGIN_REDIRECT_URL = "/dashboard/"
 PRIVATE_ARTIFACT_ROOT = Path(env("PRIVATE_ARTIFACT_ROOT", str(BASE_DIR / "private_artifacts"))).resolve()
 GOOGLE_SERVICE_ACCOUNT_FILE = os.environ.get("GOOGLE_SERVICE_ACCOUNT_FILE", "")
 GOOGLE_INGESTION_SERVICE_ACCOUNT_FILE = os.environ.get(

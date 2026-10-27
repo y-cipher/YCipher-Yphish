@@ -73,6 +73,9 @@ def ingest_message(mailbox_id, gmail_message_id, *, client=None, historical=Fals
         if case.gmail_label_ids != labels:
             case.gmail_label_ids = labels
             changes.append("gmail_label_ids")
+        if created:
+            case.gmail_initial_label_ids = labels
+            changes.append("gmail_initial_label_ids")
         if case.gmail_internal_date_ms != internal_date:
             case.gmail_internal_date_ms = internal_date
             changes.append("gmail_internal_date_ms")
