@@ -1,5 +1,11 @@
 .env
+.env.*
 .venv
+.pgtest
+.test-tmp
+trial_backups
+*.dump
+*.log
 .uv-cache
 .git
 __pycache__

@@ -4,6 +4,8 @@
 
 Connect enrolled mailboxes, inspect message evidence, and apply controlled responses through an organization-scoped operator dashboard.
 
+See [CI and release setup](CI_CD.md) for automated PostgreSQL checks, image validation, dependency audits, and GitHub activation instructions.
+
 [Features](#features) · [Tech Stack](#tech-stack) · [Getting Started](#getting-started) · [Usage](#usage) · [Configuration](#configuration) · [Troubleshooting](#troubleshooting) · [Documentation](#documentation)
 
 > **Try it locally first:** the dashboard and automated tests work without Google credentials. Real mailbox processing requires separate Google Workspace administrator configuration.

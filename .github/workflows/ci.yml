@@ -1,0 +1,142 @@
+name: Yphish CI
+
+on:
+  pull_request:
+    branches: [main, master, develop]
+  push:
+    branches: [main, master, develop]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: yphish-ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  tests:
+    name: PostgreSQL ${{ matrix.postgres }} tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        postgres: ['16', '17']
+    services:
+      postgres:
+        image: postgres:${{ matrix.postgres }}
+        env:
+          POSTGRES_DB: yphish_ci
+          POSTGRES_USER: yphish_ci
+          POSTGRES_PASSWORD: disposable-ci-password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U yphish_ci -d yphish_ci"
+          --health-interval 5s --health-timeout 5s --health-retries 12
+    env:
+      DJANGO_SECRET_KEY: synthetic-ci-only-secret-key-with-sufficient-length-123456789
+      DJANGO_DEBUG: '1'
+      DJANGO_ALLOWED_HOSTS: localhost,127.0.0.1,testserver
+      DATABASE_NAME: yphish_ci
+      DATABASE_USER: yphish_ci
+      DATABASE_PASSWORD: disposable-ci-password
+      DATABASE_HOST: 127.0.0.1
+      DATABASE_PORT: '5432'
+      # No real credentials, mailbox data, or broker are supplied to tests.
+      GOOGLE_SERVICE_ACCOUNT_FILE: ''
+      GOOGLE_INGESTION_SERVICE_ACCOUNT_FILE: ''
+      GOOGLE_RESPONSE_SERVICE_ACCOUNT_FILE: ''
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: requirements.txt
+      - run: python -m pip install -r requirements.txt
+      - run: python -m pip check
+      - name: Empty database migrations and schema consistency
+        run: |
+          python manage.py migrate --noinput
+          python manage.py migrate --check
+          python manage.py makemigrations --check --dry-run
+          python manage.py check
+      - name: Complete PostgreSQL regression suite
+        run: python manage.py test core --noinput --verbosity 2
+      - name: Secure deployment checks
+        env:
+          DJANGO_SETTINGS_MODULE: config.ci_deploy_settings
+          DJANGO_DEBUG: '0'
+          DJANGO_ALLOWED_HOSTS: trial.example.test
+          DJANGO_CSRF_TRUSTED_ORIGINS: https://trial.example.test
+          DJANGO_SECURE_SSL_REDIRECT: '1'
+          DJANGO_TRUST_PROXY_HEADERS: '1'
+          DJANGO_HSTS_SECONDS: '3600'
+        run: python manage.py check --deploy --fail-level WARNING
+
+  image:
+    name: Trial image and static assets
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - name: Validate trial Compose configuration
+        run: |
+          cp .env.trial.example .env
+          docker compose -f compose.yaml -f compose.trial.yaml config --quiet
+      - run: docker build --tag yphish:ci .
+      - name: Collect assets as the application user
+        run: docker run --rm --env-file .env yphish:ci python manage.py collectstatic --noinput
+      - name: Gunicorn startup and liveness
+        run: |
+          docker run -d --name yphish-ci-web --env-file .env \
+            -e DJANGO_SECURE_SSL_REDIRECT=0 -e DJANGO_ALLOWED_HOSTS=127.0.0.1 \
+            yphish:ci gunicorn config.wsgi:application --bind 0.0.0.0:8000
+          for attempt in $(seq 1 30); do
+            if docker exec yphish-ci-web python -c "import json, urllib.request; assert json.load(urllib.request.urlopen('http://127.0.0.1:8000/health/', timeout=2))['status'] == 'ok'"; then
+              exit 0
+            fi
+            sleep 1
+          done
+          docker logs yphish-ci-web
+          exit 1
+      - name: Stop smoke-test container
+        if: always()
+        run: docker rm -f yphish-ci-web || true
+
+  audit:
+    name: Python dependency audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7
+        with:
+          python-version: '3.12'
+      - run: python -m pip install -r requirements-ci.txt
+      - run: python -m pip_audit -r requirements.txt --strict
+
+  required:
+    name: CI required
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    if: ${{ always() }}
+    needs: [tests, image, audit]
+    env:
+      TESTS_RESULT: ${{ needs.tests.result }}
+      IMAGE_RESULT: ${{ needs.image.result }}
+      AUDIT_RESULT: ${{ needs.audit.result }}
+    steps:
+      - name: Require every job to succeed
+        run: |
+          test "$TESTS_RESULT" = success
+          test "$IMAGE_RESULT" = success
+          test "$AUDIT_RESULT" = success
