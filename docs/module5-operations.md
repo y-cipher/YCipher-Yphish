@@ -1,4 +1,4 @@
-# Module 5 — background Gmail synchronization and analysis
+# Background Gmail synchronization and analysis
 
 Module 5 runs two independent Celery Beat schedules. `poll_gmail` publishes a synchronization task for each active, enrolled mailbox; `dispatch_pending_analysis` reconciles and publishes committed MIME analysis runs. RabbitMQ carries task notifications. PostgreSQL stores the cursor, cases, artifacts, analysis work, retry state, and failure status. No response action or Cloud Pub/Sub subscription is implemented.
 
