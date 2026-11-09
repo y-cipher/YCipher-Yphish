@@ -1,4 +1,4 @@
-# Module 4 — Google Workspace Gmail ingestion
+# Google Workspace Gmail ingestion
 
 Module 4 uses Gmail polling, Django/PostgreSQL case identity, private MIME artifacts, the existing header parser and evidence service, Celery, and RabbitMQ. It performs **no mailbox response action**. The `ActionExecution` table remains for other modules, but the Module 4 worker does not create or execute Gmail actions. Django admin sign-in and organization membership are separate from Gmail authorization.
 
