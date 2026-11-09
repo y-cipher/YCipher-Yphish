@@ -1,4 +1,4 @@
-# Module 11: limited Google Workspace trial operations
+# Limited Google Workspace trial operations
 
 This is a **single Workspace, explicitly enrolled mailbox trial**. It uses Gmail `users.history.list` polling, stores original MIME privately, and can label individual messages and optionally remove `INBOX` after the response policy qualifies them. It is not pre-delivery protection or a secure quarantine. Start with automatic response disabled. A production operator must complete the administrator and live checks below before processing real mail.
 
