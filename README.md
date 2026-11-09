@@ -251,18 +251,30 @@ There is currently no top-level `LICENSE` file, so the repository does not yet s
 
 See [CI and release setup](CI_CD.md) for the current workflow and branch guidance. CI passing does not mean a change was tested against live Gmail.
 
-## Guides
+## Documentation
+
+### Architecture and Gmail
 
 | Guide | What it covers |
 | --- | --- |
 | [Data model](docs/data-model.md) | Records, constraints, identity, and write-service contracts |
 | [Gmail setup](docs/gmail.md) | Workspace authorization, mailbox enrollment, polling, and cursor recovery |
 | [Background processing](docs/module5-operations.md) | Queues, retries, worker recovery, and health |
+
+### Analysis and dashboard
+
+| Guide | What it covers |
+| --- | --- |
 | [Detection and evidence](docs/module6-detection.md) | Rules, coverage, and indicator snapshots |
 | [Model training](docs/module7-classifier.md) | Dataset selection, leakage controls, evaluation, and model artifacts |
 | [Investigation](docs/module8-investigation.md) | Approved lookups, context, limits, and stopping behavior |
 | [Automatic response](docs/module9-response.md) | Labeling, inbox removal, idempotency, and restoration |
-| [Dashboard](docs/module10-dashboard.md) | Roles, case review, settings, and feedback |
+| [Operator dashboard](docs/module10-dashboard.md) | Roles, case review, settings, and feedback |
+
+### Deployment and project readiness
+
+| Guide | What it covers |
+| --- | --- |
 | [Trial operations](docs/module11-trial-operations.md) | Deployment, secrets, backup, monitoring, and incident runbooks |
 | [Readiness report](docs/module11-readiness-report.md) | Recorded checks and outstanding live requirements |
 | [CI and releases](CI_CD.md) | Automated checks and release workflow |
