@@ -1,4 +1,4 @@
-# Module 10: Gmail operator dashboard
+# Gmail operator dashboard
 
 Open `/dashboard/` after signing in with a Django user that has an active Yphish organization membership. Dashboard authentication uses Django sessions and CSRF protection; it never grants Gmail access. Gmail ingestion and response continue to use separately configured Workspace delegated identities.
 
