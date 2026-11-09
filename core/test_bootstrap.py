@@ -48,6 +48,25 @@ class BootstrapDevTests(TestCase):
             call_command("bootstrap_dev", mailboxes=["real@example.com"])
         self.assertFalse(Organization.objects.filter(slug="demo-org").exists())
 
+    def test_demo_emails_are_repeatable_and_clearly_synthetic(self):
+        output = StringIO()
+        call_command("bootstrap_dev", with_demo_emails=True, stdout=output)
+        call_command("bootstrap_dev", with_demo_emails=True, stdout=output)
+
+        cases = EmailCase.objects.filter(organization__slug="demo-org", gmail_message_id__startswith="demo:")
+        self.assertEqual(cases.count(), 6)
+        self.assertTrue(all(case.subject and case.sender_address.endswith("@example.test") for case in cases))
+        self.assertTrue(all(case.state == EmailCase.State.ANALYZED for case in cases))
+        self.assertEqual(
+            Evidence.objects.filter(case__in=cases, details__synthetic=True, details__gmail_api_used=False).count(),
+            6,
+        )
+        self.assertEqual(
+            ActionExecution.objects.filter(case__in=cases, state=ActionExecution.State.SKIPPED).count(),
+            6,
+        )
+        self.assertFalse(Artifact.objects.filter(case__in=cases, file__gt="").exists())
+
     def test_does_not_promote_an_existing_unrelated_user(self):
         user = get_user_model().objects.create_user("demo_owner", password="existing-password")
         with self.assertRaises(CommandError):

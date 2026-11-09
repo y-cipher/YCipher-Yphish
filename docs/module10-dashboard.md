@@ -34,3 +34,5 @@ docker compose exec web python manage.py test core
 For a host setup with `.env` exported and PostgreSQL running, use `python manage.py migrate`, `python manage.py runserver`, and `python manage.py test core.test_dashboard`. Bootstrap 5.3.8 CSS is pinned and served locally from `core/static/core/bootstrap.min.css`; the dashboard does not require a third-party CDN at runtime. The [Bootstrap download documentation](https://getbootstrap.com/docs/5.3/getting-started/download/) supplies the version and distribution.
 
 Tests use synthetic message records and PostgreSQL. Live Gmail authorization, synchronization, and message modification still require the separate [Gmail setup](gmail.md) and [response checklist](module9-response.md).
+
+For dashboard exploration, `python manage.py bootstrap_dev --with-demo-emails` adds six realistic-looking but explicitly synthetic case previews using only reserved `example.test` senders. It creates no original MIME or message body and must not be presented as Gmail-delivered mail. Personal Gmail OAuth is not implemented; live ingestion currently requires Workspace domain-wide delegation described in [Gmail setup](gmail.md).

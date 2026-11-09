@@ -6,6 +6,7 @@ from django.core.exceptions import ValidationError
 from django.core.management.base import BaseCommand, CommandError
 from django.core.validators import validate_email, validate_slug
 from django.db import transaction
+from django.utils import timezone
 
 from core.models import (
     ActionExecution, AnalysisRun, Artifact, EmailCase, Feedback, Mailbox,
@@ -18,6 +19,14 @@ from core.services import (
 
 
 DEFAULT_MAILBOXES = ("security@example.test", "finance@example.test")
+DEMO_EMAILS = (
+    ("billing@example.test", "Your invoice is ready: INV-2048", "legitimate"),
+    ("accounts@example.test", "Password reset requested for your account", "legitimate"),
+    ("news@example.test", "Your weekly product update", "legitimate"),
+    ("vendor@example.test", "Updated payment instructions for invoice 57318", "suspicious"),
+    ("payroll@example.test", "Review your direct deposit details", "suspicious"),
+    ("support@example.test", "Action required: verify your account access", "suspicious"),
+)
 
 
 class Command(BaseCommand):
@@ -34,6 +43,10 @@ class Command(BaseCommand):
         parser.add_argument(
             "--with-sample-cases", action="store_true",
             help="Also create synthetic cases, evidence, and non-executed actions",
+        )
+        parser.add_argument(
+            "--with-demo-emails", action="store_true",
+            help="Create six realistic-looking, clearly synthetic email case records",
         )
 
     def handle(self, *args, **options):
@@ -107,6 +120,10 @@ class Command(BaseCommand):
             if options["with_sample_cases"]:
                 for mailbox in mailboxes:
                     self._create_sample_case(organization, owner, mailbox)
+            if options["with_demo_emails"]:
+                for index, (sender, subject, verdict) in enumerate(DEMO_EMAILS, start=1):
+                    mailbox = mailboxes[(index - 1) % len(mailboxes)]
+                    self._create_demo_email(organization, owner, mailbox, index, sender, subject, verdict)
 
         self.stdout.write(self.style.SUCCESS(
             f"Development organization '{organization.slug}' is ready with "
@@ -119,6 +136,11 @@ class Command(BaseCommand):
             )
         if options["with_sample_cases"]:
             self.stdout.write("Synthetic cases contain no message body, MIME, or provider credentials.")
+        if options["with_demo_emails"]:
+            self.stdout.write(
+                "Six demo email records were created with example.test addresses. "
+                "They are synthetic and did not arrive through Gmail."
+            )
 
     def _create_sample_case(self, organization, owner, mailbox):
         case, _ = create_email_case(
@@ -170,4 +192,62 @@ class Command(BaseCommand):
             submitted_by=owner,
             proposed_verdict=EmailCase.Verdict.UNKNOWN,
             reason="Synthetic fixture only; no email content was collected.",
+        )
+
+    def _create_demo_email(self, organization, owner, mailbox, index, sender, subject, verdict):
+        """Populate useful dashboard previews without inventing Gmail/API provenance."""
+        message_id = f"demo:{organization.slug}:{index:02d}"
+        case, created = create_email_case(
+            organization=organization, mailbox=mailbox, gmail_message_id=message_id,
+        )
+        if not created:
+            if not case.gmail_message_id.startswith("demo:"):
+                raise CommandError("Demo case key collided with a non-demo Gmail case")
+            return
+
+        now = timezone.now()
+        case.subject = subject
+        case.sender_address = sender
+        case.received_at = now
+        case.state = EmailCase.State.ANALYZED
+        case.verdict = verdict
+        case.save(update_fields=["subject", "sender_address", "received_at", "state", "verdict", "updated_at"])
+        run = AnalysisRun.objects.create(
+            organization=organization,
+            case=case,
+            attempt=1,
+            idempotency_key=f"demo:analysis:{index:02d}",
+            state=AnalysisRun.State.SUCCEEDED,
+            engine_version="synthetic-demo-v1",
+            started_at=now,
+            finished_at=now,
+            summary={"synthetic": True, "message_body_present": False},
+        )
+        record_evidence(
+            organization=organization,
+            case=case,
+            analysis_run=run,
+            idempotency_key=f"demo:observation:{index:02d}",
+            source="ingestion",
+            label="Synthetic demo record; no Gmail message retrieved",
+            observed_at=now,
+            trust="internal",
+            source_version="synthetic-demo-v1",
+            details={"synthetic": True, "message_body_present": False, "gmail_api_used": False},
+        )
+        action, _ = create_action_execution(
+            organization=organization,
+            case=case,
+            analysis_run=run,
+            idempotency_key=f"demo:action:{index:02d}",
+            action=ActionExecution.Action.CATEGORIZE,
+            policy_version="synthetic-demo-v1",
+        )
+        mark_action_skipped(execution=action, reason_code="synthetic_demo_no_gmail_access")
+        Feedback.objects.get_or_create(
+            organization=organization,
+            case=case,
+            submitted_by=owner,
+            proposed_verdict=verdict,
+            reason="Synthetic dashboard demo only; not a user-reviewed Gmail message.",
         )
