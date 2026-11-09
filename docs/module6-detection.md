@@ -1,4 +1,4 @@
-# Module 6 — deterministic Gmail detection evidence
+# Deterministic Gmail detection evidence
 
 Module 6 extends the existing Celery MIME analysis run. It reads the privately stored **original MIME** with Python's `BytesParser(policy=policy.default)`, records versioned `Evidence` rows, and leaves the artifact bytes and SHA-256 unchanged. Gmail message ID, label IDs, and timestamps supplement the MIME record; they do not rewrite headers or body. There are no response actions, URL visits, attachment executions, or automatic safety verdicts.
 
