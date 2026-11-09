@@ -1,4 +1,4 @@
-# Module 7 — TF-IDF classifier
+# TF-IDF classifier
 
 Module 7 adds an optional, provider-independent text classifier to the existing MIME analysis run. It reads the preserved original MIME artifact and extracts only its subject and visible body text. `TextDocument` is the shared training/inference boundary; the fitted pipeline is TF-IDF followed by logistic regression. Gmail IDs, threads, labels, inbox placement, mailbox and organization IDs, sender history, indicator observations, rule evidence, analyst feedback, and dispositions are not model inputs. Gmail `SPAM` is neither a feature nor a ground-truth label. The classifier records probability and artifact identity as `Evidence.Source.MODEL`; it does not set a case verdict or trigger a response. Rules, parser evidence, and the preserved MIME continue when the model is unavailable or incompatible.
 
