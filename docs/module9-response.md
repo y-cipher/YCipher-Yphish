@@ -1,4 +1,4 @@
-# Module 9: automatic Gmail message response
+# Automatic Gmail message response
 
 This feature labels an individual Gmail message `Yphish/Suspicious` and, when an enrolled mailbox has `gmail_response_remove_inbox` enabled, removes `INBOX` from that message. It is **not** secure quarantine, pre-delivery protection, or a guarantee that a recipient did not see the message. It never calls Gmail thread modification, SPAM, TRASH, deletion, filters, or account settings. Gmail `UNREAD` and unrelated labels are not included in the requested changes.
 
