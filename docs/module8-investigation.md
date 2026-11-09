@@ -1,4 +1,4 @@
-# Module 8 — bounded adaptive investigation
+# Bounded adaptive investigation
 
 After a successful nonhistorical Gmail MIME analysis, Yphish commits one `InvestigationRun` for that case. The Celery sweep dispatches queued runs through RabbitMQ; a worker claims each run with a lease and records each selected tool call as an `InvestigationStep` and `Evidence.Source.TOOL`. Broker failures leave queued work for the next sweep, and expired leases are reconciled. The run records its rounds, calls, summary, and stopping reason. The workflow is read-only and never changes the message verdict or creates an action.
 
