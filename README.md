@@ -243,6 +243,10 @@ docker compose -f compose.yaml -f compose.trial.yaml exec worker python manage.p
 
 These commands check configuration and application state; they do not independently verify public DNS, a real TLS handshake, Google authorization, backup recovery, or detection performance.
 
+## Deploy on Render
+
+Render uses a separate service for the web app, PostgreSQL, RabbitMQ, the worker, and the scheduler. The [Render deployment guide](docs/render-deployment.md) covers the Blueprint, private object storage, environment values, synthetic demo login, and the Gmail authorization boundary. The Render setup requires paid resources for persistent storage and continuous background services; the free tier is not suitable for a full deployment.
+
 ## Contributing
 
 Contributions and clear issue reports are welcome. Before opening a pull request, describe the behavior changed, keep organization boundaries and data privacy intact, and run the PostgreSQL-backed checks above. For an issue, include reproducible steps and sanitized logs; **never attach real email content, access tokens, service-account keys, or production database data**.
@@ -276,5 +280,6 @@ See [CI and release setup](CI_CD.md) for the current workflow and branch guidanc
 | Guide | What it covers |
 | --- | --- |
 | [Trial operations](docs/module11-trial-operations.md) | Deployment, secrets, backup, monitoring, and incident runbooks |
+| [Render deployment](docs/render-deployment.md) | Render services, private object storage, setup, and demo login |
 | [Readiness report](docs/module11-readiness-report.md) | Recorded checks and outstanding live requirements |
 | [CI and releases](CI_CD.md) | Automated checks and release workflow |

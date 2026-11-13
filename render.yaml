@@ -1,0 +1,160 @@
+envVarGroups:
+  - name: yphish-render-runtime
+    envVars:
+      - key: DJANGO_SECRET_KEY
+        generateValue: true
+      - key: DJANGO_DEBUG
+        value: "0"
+      - key: DJANGO_ALLOWED_HOSTS
+        value: yphish-web.onrender.com
+      - key: DJANGO_CSRF_TRUSTED_ORIGINS
+        value: https://yphish-web.onrender.com
+      - key: DJANGO_SECURE_SSL_REDIRECT
+        value: "1"
+      - key: DJANGO_TRUST_PROXY_HEADERS
+        value: "1"
+      - key: DJANGO_HSTS_SECONDS
+        value: "3600"
+      - key: PRIVATE_ARTIFACT_ROOT
+        value: /app/private_artifacts
+      - key: PRIVATE_ARTIFACT_STORAGE_BACKEND
+        value: s3
+      - key: PRIVATE_ARTIFACT_S3_BUCKET
+        value: yphish-private-artifacts
+      - key: PRIVATE_ARTIFACT_S3_REGION
+        value: us-east-1
+      - key: PRIVATE_ARTIFACT_S3_SCHEME
+        value: https
+      - key: GMAIL_RESPONSE_ENABLED
+        value: "0"
+      - key: GMAIL_POLL_INTERVAL_SECONDS
+        value: "60"
+      - key: DETECTION_INDICATOR_MODE
+        value: operational
+      - key: DETECTION_AUTH_RESULTS_MODE
+        value: untrusted_context
+      - key: CLASSIFIER_MODEL_ROOT
+        value: /app/model_artifacts
+      - key: CLASSIFIER_ACTIVE_VERSION
+        value: ""
+      - key: INVESTIGATION_ENABLED
+        value: "1"
+      - key: INVESTIGATION_DNS_ENABLED
+        value: "0"
+      - key: ARTIFACT_RETENTION_ENABLED
+        value: "0"
+
+databases:
+  - name: yphish-postgres
+    databaseName: yphish
+    user: yphish
+    plan: 0.5c-1g
+    region: singapore
+
+services:
+  - type: pserv
+    name: yphish-rabbitmq
+    runtime: docker
+    dockerfilePath: ./deploy/render/rabbitmq.Dockerfile
+    region: singapore
+    plan: 0.5c-512mb
+    disk:
+      name: yphish-rabbitmq-data
+      mountPath: /var/lib/rabbitmq
+      sizeGB: 10
+    envVars:
+      - key: RABBITMQ_DEFAULT_USER
+        value: yphish
+      - key: RABBITMQ_DEFAULT_PASS
+        generateValue: true
+      - key: RABBITMQ_ERLANG_COOKIE
+        generateValue: true
+
+  - type: web
+    name: yphish-web
+    runtime: docker
+    plan: 1c-2g
+    region: singapore
+    preDeployCommand: python manage.py migrate --noinput
+    dockerCommand: sh -c 'python manage.py collectstatic --noinput && exec gunicorn config.wsgi:application --bind 0.0.0.0:${PORT:-10000} --workers 2 --timeout 60 --access-logfile - --error-logfile -'
+    healthCheckPath: /health/
+    envVars:
+      - fromGroup: yphish-render-runtime
+      - key: DATABASE_URL
+        fromDatabase:
+          name: yphish-postgres
+          property: connectionString
+      - key: CELERY_BROKER_HOST
+        fromService:
+          name: yphish-rabbitmq
+          type: pserv
+          property: host
+      - key: CELERY_BROKER_USER
+        value: yphish
+      - key: CELERY_BROKER_PASSWORD
+        fromService:
+          name: yphish-rabbitmq
+          type: pserv
+          envVarKey: RABBITMQ_DEFAULT_PASS
+      - key: PRIVATE_ARTIFACT_S3_ENDPOINT
+        sync: false
+      - key: PRIVATE_ARTIFACT_S3_ACCESS_KEY
+        sync: false
+      - key: PRIVATE_ARTIFACT_S3_SECRET_KEY
+        sync: false
+
+  - type: worker
+    name: yphish-worker
+    runtime: docker
+    plan: 1c-2g
+    region: singapore
+    dockerCommand: celery -A config worker -l WARNING --concurrency=2
+    envVars:
+      - fromGroup: yphish-render-runtime
+      - key: DATABASE_URL
+        fromDatabase:
+          name: yphish-postgres
+          property: connectionString
+      - key: CELERY_BROKER_HOST
+        fromService:
+          name: yphish-rabbitmq
+          type: pserv
+          property: host
+      - key: CELERY_BROKER_USER
+        value: yphish
+      - key: CELERY_BROKER_PASSWORD
+        fromService:
+          name: yphish-rabbitmq
+          type: pserv
+          envVarKey: RABBITMQ_DEFAULT_PASS
+      - key: PRIVATE_ARTIFACT_S3_ENDPOINT
+        sync: false
+      - key: PRIVATE_ARTIFACT_S3_ACCESS_KEY
+        sync: false
+      - key: PRIVATE_ARTIFACT_S3_SECRET_KEY
+        sync: false
+
+  - type: worker
+    name: yphish-beat
+    runtime: docker
+    plan: 0.5c-512mb
+    region: singapore
+    dockerCommand: celery -A config beat -l WARNING --schedule /tmp/celerybeat-schedule
+    envVars:
+      - fromGroup: yphish-render-runtime
+      - key: DATABASE_URL
+        fromDatabase:
+          name: yphish-postgres
+          property: connectionString
+      - key: CELERY_BROKER_HOST
+        fromService:
+          name: yphish-rabbitmq
+          type: pserv
+          property: host
+      - key: CELERY_BROKER_USER
+        value: yphish
+      - key: CELERY_BROKER_PASSWORD
+        fromService:
+          name: yphish-rabbitmq
+          type: pserv
+          envVarKey: RABBITMQ_DEFAULT_PASS

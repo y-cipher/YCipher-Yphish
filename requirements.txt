@@ -9,3 +9,4 @@ joblib>=1.4,<2
 dnspython>=2.7,<3
 gunicorn>=23,<24
 whitenoise>=6.9,<7
+django-storages[s3]>=1.14.6,<2

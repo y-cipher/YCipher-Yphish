@@ -8,6 +8,8 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 RUN useradd --create-home --uid 10001 app \
+    && (getent group 1000 >/dev/null || groupadd --gid 1000 render-secrets) \
+    && usermod --append --groups 1000 app \
     && mkdir -p /app/private_artifacts \
     && mkdir -p /app/model_artifacts \
     && mkdir -p /app/staticfiles \

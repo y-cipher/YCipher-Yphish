@@ -2,6 +2,7 @@
 
 import os
 from pathlib import Path
+from urllib.parse import parse_qsl, unquote, urlsplit
 
 from django.core.exceptions import ImproperlyConfigured
 
@@ -78,8 +79,29 @@ TEMPLATES = [
 WSGI_APPLICATION = "config.wsgi.application"
 ASGI_APPLICATION = "config.asgi.application"
 
-DATABASES = {
-    "default": {
+
+def database_config():
+    """Accept Render's managed PostgreSQL URL and the existing Compose variables."""
+    database_url = os.environ.get("DATABASE_URL", "")
+    if database_url:
+        parsed = urlsplit(database_url)
+        if parsed.scheme not in {"postgres", "postgresql"} or not parsed.hostname:
+            raise ImproperlyConfigured("DATABASE_URL must be a PostgreSQL connection URL")
+        options = {}
+        query = dict(parse_qsl(parsed.query, keep_blank_values=True))
+        if query.get("sslmode"):
+            options["sslmode"] = query["sslmode"]
+        return {
+            "ENGINE": "django.db.backends.postgresql",
+            "NAME": unquote(parsed.path.lstrip("/")),
+            "USER": unquote(parsed.username or ""),
+            "PASSWORD": unquote(parsed.password or ""),
+            "HOST": parsed.hostname,
+            "PORT": str(parsed.port or 5432),
+            "OPTIONS": options,
+            "CONN_HEALTH_CHECKS": True,
+        }
+    return {
         "ENGINE": "django.db.backends.postgresql",
         "NAME": env("DATABASE_NAME"),
         "USER": env("DATABASE_USER"),
@@ -88,7 +110,9 @@ DATABASES = {
         "PORT": env("DATABASE_PORT", "5432"),
         "CONN_HEALTH_CHECKS": True,
     }
-}
+
+
+DATABASES = {"default": database_config()}
 
 AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},
@@ -108,12 +132,40 @@ TEST_RUNNER = "config.test_runner.StaticFilesTestRunner"
 LOGIN_URL = "/dashboard/login/"
 LOGIN_REDIRECT_URL = "/dashboard/"
 PRIVATE_ARTIFACT_ROOT = Path(env("PRIVATE_ARTIFACT_ROOT", str(BASE_DIR / "private_artifacts"))).resolve()
+PRIVATE_ARTIFACT_STORAGE_BACKEND = os.environ.get("PRIVATE_ARTIFACT_STORAGE_BACKEND", "filesystem")
+if PRIVATE_ARTIFACT_STORAGE_BACKEND not in {"filesystem", "s3"}:
+    raise ImproperlyConfigured("PRIVATE_ARTIFACT_STORAGE_BACKEND must be filesystem or s3")
+PRIVATE_ARTIFACT_S3_BUCKET = os.environ.get("PRIVATE_ARTIFACT_S3_BUCKET", "")
+PRIVATE_ARTIFACT_S3_REGION = os.environ.get("PRIVATE_ARTIFACT_S3_REGION", "us-east-1")
+PRIVATE_ARTIFACT_S3_ENDPOINT = os.environ.get("PRIVATE_ARTIFACT_S3_ENDPOINT", "")
+if not PRIVATE_ARTIFACT_S3_ENDPOINT and os.environ.get("PRIVATE_ARTIFACT_S3_HOST"):
+    s3_scheme = os.environ.get("PRIVATE_ARTIFACT_S3_SCHEME", "https")
+    s3_host = os.environ["PRIVATE_ARTIFACT_S3_HOST"]
+    s3_port = os.environ.get("PRIVATE_ARTIFACT_S3_PORT", "9000")
+    PRIVATE_ARTIFACT_S3_ENDPOINT = f"{s3_scheme}://{s3_host}:{s3_port}"
+PRIVATE_ARTIFACT_S3_ACCESS_KEY = os.environ.get("PRIVATE_ARTIFACT_S3_ACCESS_KEY", "")
+PRIVATE_ARTIFACT_S3_SECRET_KEY = os.environ.get("PRIVATE_ARTIFACT_S3_SECRET_KEY", "")
+if PRIVATE_ARTIFACT_STORAGE_BACKEND == "s3" and not all((
+    PRIVATE_ARTIFACT_S3_BUCKET, PRIVATE_ARTIFACT_S3_ENDPOINT,
+    PRIVATE_ARTIFACT_S3_ACCESS_KEY, PRIVATE_ARTIFACT_S3_SECRET_KEY,
+)):
+    raise ImproperlyConfigured("S3 artifact storage requires bucket, endpoint, access key, and secret key")
 GOOGLE_SERVICE_ACCOUNT_FILE = os.environ.get("GOOGLE_SERVICE_ACCOUNT_FILE", "")
 GOOGLE_INGESTION_SERVICE_ACCOUNT_FILE = os.environ.get(
     "GOOGLE_INGESTION_SERVICE_ACCOUNT_FILE", GOOGLE_SERVICE_ACCOUNT_FILE,
 )
 GOOGLE_RESPONSE_SERVICE_ACCOUNT_FILE = os.environ.get("GOOGLE_RESPONSE_SERVICE_ACCOUNT_FILE", "")
-CELERY_BROKER_URL = os.environ.get("CELERY_BROKER_URL", "amqp://guest:guest@localhost:5672//")
+CELERY_BROKER_URL = os.environ.get("CELERY_BROKER_URL", "")
+if not CELERY_BROKER_URL and os.environ.get("CELERY_BROKER_HOST"):
+    from urllib.parse import quote
+
+    broker_user = quote(os.environ.get("CELERY_BROKER_USER", "yphish"), safe="")
+    broker_password = quote(os.environ.get("CELERY_BROKER_PASSWORD", ""), safe="")
+    broker_host = os.environ["CELERY_BROKER_HOST"]
+    broker_port = os.environ.get("CELERY_BROKER_PORT", "5672")
+    CELERY_BROKER_URL = f"amqp://{broker_user}:{broker_password}@{broker_host}:{broker_port}//"
+if not CELERY_BROKER_URL:
+    CELERY_BROKER_URL = "amqp://guest:guest@localhost:5672//"
 CELERY_TASK_SERIALIZER = "json"
 CELERY_ACCEPT_CONTENT = ["json"]
 CELERY_TIMEZONE = "UTC"

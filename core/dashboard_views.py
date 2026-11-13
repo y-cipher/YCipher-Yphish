@@ -126,7 +126,7 @@ def _body_preview(case):
         document = extract_document(BytesParser(policy=policy.default).parsebytes(raw))
         text = document.body_text[:2500]
         return text, "Preview limited to 2,500 characters; HTML is rendered as escaped text."
-    except (OSError, ValueError, TypeError, UnicodeError, LookupError):
+    except Exception:
         return "", "Original MIME could not be previewed."
 
 

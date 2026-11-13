@@ -55,7 +55,7 @@ def prune_private_artifacts(*, dry_run=False, limit=None, now=None):
     )[:limit]:
         try:
             artifact.file.storage.delete(artifact.file.name)
-        except OSError:
+        except Exception:
             counts["file_errors"] += 1
             continue
         Artifact.objects.filter(pk=artifact.pk, state=Artifact.State.DELETED).update(file="")
